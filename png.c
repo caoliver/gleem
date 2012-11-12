@@ -25,8 +25,7 @@
 #include "const.h"
 
 int
-read_png(const char *filename, int *width, int *height, unsigned char **rgb,
-	 unsigned char **alpha)
+read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
 {
   int ret = 0;
 
@@ -38,15 +37,8 @@ read_png(const char *filename, int *width, int *height, unsigned char **rgb,
   png_uint_32 w, h;
   int bit_depth, color_type, interlace_type;
   int i;
+  int has_alpha;
 
-  FILE *infile = fopen(filename, "rb");
-  if (infile == NULL)
-    {
-      fprintf(stderr, "Can not fopen file: %s\n", filename);
-      return ret;
-    }
-
-  ;
   if (!(png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
 					 (png_voidp) NULL,
 					 (png_error_ptr) NULL,
@@ -70,17 +62,15 @@ read_png(const char *filename, int *width, int *height, unsigned char **rgb,
   /* Prevent against integer overflow */
   if (w >= MAX_DIMENSION || h >= MAX_DIMENSION)
     {
-      fprintf(stderr, "Unreasonable dimension found in file: %s\n", filename);
+      fprintf(stderr, "Unreasonable dimension found in image file\n");
       goto bugout;
     }
 
   *width = (int) w;
   *height = (int) h;
 
-  if ((color_type == PNG_COLOR_TYPE_RGB_ALPHA
-       || color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
-      && (*alpha = malloc(*width * *height)) == NULL)
-    abort();
+  has_alpha = (color_type == PNG_COLOR_TYPE_RGB_ALPHA
+	       || color_type == PNG_COLOR_TYPE_GRAY_ALPHA);
 
   /* Change a paletted/grayscale image to RGB */
   if (color_type == PNG_COLOR_TYPE_PALETTE && bit_depth <= 8)
@@ -102,43 +92,35 @@ read_png(const char *filename, int *width, int *height, unsigned char **rgb,
     abort();
 
   for (i = 0; i < *height; i++)
-    if ((row_pointers[i] = malloc(4 * *width)) == NULL)
+    if ((row_pointers[i] = malloc((has_alpha ? 4 : 3) * *width)) == NULL)
       abort();
 
   png_read_image(png_ptr, row_pointers);
 
-  if ((*rgb = malloc(3 * *width * *height)) == NULL)
+  if ((*rgba = malloc(4 * *width * *height)) == NULL)
     abort();
 
-  if (*alpha == NULL)
-    {
-      ptr = *rgb;
-      for (i = 0; i < *height; i++)
-	{
-	  memcpy(ptr, row_pointers[i], 3 * *width);
-	  ptr += 3 * *width;
-	}
-    }
+  ptr = *rgba;
+  if (has_alpha)
+    for (i = 0; i < *height; i++)
+      {
+	memcpy(ptr, row_pointers[i], 4 * *width);
+	ptr += 4 * *width;
+      }
   else
-    {
-      int j;
-      unsigned char *alpha_ptr = *alpha;
+    for (i = 0; i < *height; i++)
+      {
+	int j;
+	unsigned char *src = row_pointers[i];
 
-      ptr = *rgb;
-      for (i = 0; i < *height; i++)
-	{
-	  int ipos = 0;
-	  unsigned char *rptr = row_pointers[i];
-
-	  for (j = 0; j < *width; j++)
-	    {
-	      *ptr++ = *rptr++;
-	      *ptr++ = *rptr++;
-	      *ptr++ = *rptr++;
-	      *alpha_ptr++ = *rptr++;
-	    }
-	}
-    }
+	for (j = 0; j < *width; j++)
+	  {
+	    memcpy(ptr, src, 3);
+	    ptr[3] = 0xFF;
+	    src += 3;
+	    ptr += 4;
+	  }
+      }
 
   ret = 1;			/* data reading is OK */
 
@@ -150,7 +132,5 @@ read_png(const char *filename, int *width, int *height, unsigned char **rgb,
 
  bugout:
   png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
-
-  fclose(infile);
   return (ret);
 }

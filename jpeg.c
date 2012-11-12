@@ -1,4 +1,4 @@
-/****************************************************************************
+<</****************************************************************************
     jpeg.c - read and write jpeg images using libjpeg routines
     Copyright (C) 2002 Hari Nair <hari@alumni.caltech.edu>
 
@@ -25,20 +25,13 @@
 #include "const.h"
 
 int
-read_jpeg(const char *filename, int *width, int *height, unsigned char **rgb)
+read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
 {
   int ret = 0;
   struct jpeg_decompress_struct cinfo;
   struct jpeg_error_mgr jerr;
   unsigned char *ptr = NULL;
   unsigned int i, ipos;
-
-  FILE *infile = fopen(filename, "rb");
-  if (infile == NULL)
-    {
-      fprintf(stderr, "Can not fopen file: %s\n", filename);
-      return ret;
-    }
 
   cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_decompress(&cinfo);
@@ -50,44 +43,50 @@ read_jpeg(const char *filename, int *width, int *height, unsigned char **rgb)
   if (cinfo.output_width >= MAX_DIMENSION
       || cinfo.output_height >= MAX_DIMENSION)
     {
-      fprintf(stderr, "Unreasonable dimension found in file: %s\n", filename);
+      fprintf(stderr, "Unreasonable dimension found in image file\n");
       goto bugout;
     }
 
   *width = cinfo.output_width;
   *height = cinfo.output_height;
 
-  if ((*rgb = malloc(3 * cinfo.output_width * cinfo.output_height)) == NULL)
+  if ((*rgba = malloc(4 * cinfo.output_width * cinfo.output_height)) == NULL)
     abort();
 
+  ptr = *rgba;
   if (cinfo.output_components == 3)
     {
-      ptr = *rgb;
       while (cinfo.output_scanline < cinfo.output_height)
 	{
+	  unsigned char *dst = ptr + 4 * cinfo.output_width - 4,
+	    *src = ptr + 3 * cinfo.output_width - 3;
+
 	  jpeg_read_scanlines(&cinfo, &ptr, 1);
-	  ptr += 3 * cinfo.output_width;
+	  for (i = 0; i < cinfo.output_width; i++)
+	    {
+	      dst[3] = 0xFF;
+	      memmove(&dst[0], src, 3);
+	      dst -= 4;
+	      src -= 3;
+	    }
+	  ptr += 4 * cinfo.output_width;
 	}
     }
   else if (cinfo.output_components == 1)
-    {
-      if ((ptr = malloc(cinfo.output_width)) == NULL)
-	  abort();
+    while (cinfo.output_scanline < cinfo.output_height)
+      {
+	unsigned char *dst = ptr + 4 * cinfo.output_width - 4,
+	  *src = ptr + cinfo.output_width - 1;
 
-      ipos = 0;
-      while (cinfo.output_scanline < cinfo.output_height)
-	{
-	  jpeg_read_scanlines(&cinfo, &ptr, 1);
-
-	  for (i = 0; i < cinfo.output_width; i++)
-	    {
-	      memset(*rgb + ipos, ptr[i], 3);
-	      ipos += 3;
-	    }
-	}
-
-      free(ptr);
-    }
+	jpeg_read_scanlines(&cinfo, &ptr, 1);
+	for (i = 0; i < cinfo.output_width; i++)
+	  {
+	    dst[3] = 0xFF;
+	    memset(&dst[0], *src--, 3);
+	    dst -= 4;
+	  }
+	ptr += 4 * cinfo.output_width;
+      }
 
   jpeg_finish_decompress(&cinfo);
 
@@ -95,8 +94,6 @@ read_jpeg(const char *filename, int *width, int *height, unsigned char **rgb)
 
  bugout:
   jpeg_destroy_decompress(&cinfo);
-  fclose(infile);
   
   return (ret);
 }
-
