@@ -1,4 +1,4 @@
-<</****************************************************************************
+/****************************************************************************
     jpeg.c - read and write jpeg images using libjpeg routines
     Copyright (C) 2002 Hari Nair <hari@alumni.caltech.edu>
 
