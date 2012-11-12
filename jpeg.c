@@ -30,8 +30,6 @@ read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
   int ret = 0;
   struct jpeg_decompress_struct cinfo;
   struct jpeg_error_mgr jerr;
-  unsigned char *ptr = NULL;
-  unsigned int i, ipos;
 
   cinfo.err = jpeg_std_error(&jerr);
   jpeg_create_decompress(&cinfo);
@@ -53,39 +51,32 @@ read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
   if ((*rgba = malloc(4 * cinfo.output_width * cinfo.output_height)) == NULL)
     abort();
 
-  ptr = *rgba;
+  unsigned char *ptr = *rgba;
   if (cinfo.output_components == 3)
     {
       while (cinfo.output_scanline < cinfo.output_height)
 	{
-	  unsigned char *dst = ptr + 4 * cinfo.output_width - 4,
-	    *src = ptr + 3 * cinfo.output_width - 3;
+	  unsigned char *src = ptr + cinfo.output_width;
 
-	  jpeg_read_scanlines(&cinfo, &ptr, 1);
-	  for (i = 0; i < cinfo.output_width; i++)
+	  jpeg_read_scanlines(&cinfo, &src, 1);
+	  for (int i = cinfo.output_width; i--; ptr += 4, src += 3)
 	    {
-	      dst[3] = 0xFF;
-	      memmove(&dst[0], src, 3);
-	      dst -= 4;
-	      src -= 3;
+	      memmove(&ptr[0], src, 3);
+	      ptr[3] = 0xFF;
 	    }
-	  ptr += 4 * cinfo.output_width;
 	}
     }
   else if (cinfo.output_components == 1)
     while (cinfo.output_scanline < cinfo.output_height)
       {
-	unsigned char *dst = ptr + 4 * cinfo.output_width - 4,
-	  *src = ptr + cinfo.output_width - 1;
+	unsigned char *src = ptr + 3 * cinfo.output_width;
 
-	jpeg_read_scanlines(&cinfo, &ptr, 1);
-	for (i = 0; i < cinfo.output_width; i++)
+	jpeg_read_scanlines(&cinfo, &src, 1);
+	for (int i = cinfo.output_width; i--; ptr += 4, src++)
 	  {
-	    dst[3] = 0xFF;
-	    memset(&dst[0], *src--, 3);
-	    dst -= 4;
+	    memset(ptr, *src, 3);
+	    ptr[3] = 0xFF;
 	  }
-	ptr += 4 * cinfo.output_width;
       }
 
   jpeg_finish_decompress(&cinfo);
@@ -94,6 +85,6 @@ read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
 
  bugout:
   jpeg_destroy_decompress(&cinfo);
-  
+
   return (ret);
 }

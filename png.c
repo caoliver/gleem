@@ -20,7 +20,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <png.h>
 #include "const.h"
 
@@ -32,11 +31,8 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   png_structp png_ptr;
   png_infop info_ptr;
   png_bytepp row_pointers;
-
-  unsigned char *ptr = NULL;
   png_uint_32 w, h;
   int bit_depth, color_type, interlace_type;
-  int i;
   int has_alpha;
 
   if (!(png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
@@ -59,7 +55,7 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   png_get_IHDR(png_ptr, info_ptr, &w, &h, &bit_depth, &color_type,
 	       &interlace_type, (int *) NULL, (int *) NULL);
 
-  /* Prevent against integer overflow */
+  /* Protect against integer overflow */
   if (w >= MAX_DIMENSION || h >= MAX_DIMENSION)
     {
       fprintf(stderr, "Unreasonable dimension found in image file\n");
@@ -72,26 +68,22 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   has_alpha = (color_type == PNG_COLOR_TYPE_RGB_ALPHA
 	       || color_type == PNG_COLOR_TYPE_GRAY_ALPHA);
 
-  /* Change a paletted/grayscale image to RGB */
   if (color_type == PNG_COLOR_TYPE_PALETTE && bit_depth <= 8)
     png_set_expand(png_ptr);
 
-  /* Change a grayscale image to RGB */
   if (color_type == PNG_COLOR_TYPE_GRAY
       || color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
     png_set_gray_to_rgb(png_ptr);
 
-  /* If the PNG file has 16 bits per channel, strip them down to 8 */
   if (bit_depth == 16)
     png_set_strip_16(png_ptr);
 
-  /* use 1 byte per pixel */
   png_set_packing(png_ptr);
 
   if ((row_pointers = malloc(*height * sizeof(png_bytep))) == NULL)
     abort();
 
-  for (i = 0; i < *height; i++)
+  for (int i = 0; i < *height; i++)
     if ((row_pointers[i] = malloc((has_alpha ? 4 : 3) * *width)) == NULL)
       abort();
 
@@ -100,34 +92,29 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   if ((*rgba = malloc(4 * *width * *height)) == NULL)
     abort();
 
-  ptr = *rgba;
+  unsigned char *ptr = *rgba;
   if (has_alpha)
-    for (i = 0; i < *height; i++)
+    for (int i = 0; i < *height; i++)
       {
 	memcpy(ptr, row_pointers[i], 4 * *width);
 	ptr += 4 * *width;
       }
   else
-    for (i = 0; i < *height; i++)
+    for (int i = 0; i < *height; i++)
       {
-	int j;
 	unsigned char *src = row_pointers[i];
 
-	for (j = 0; j < *width; j++)
+	for (int j = *width; j--; src += 3, ptr += 4)
 	  {
 	    memcpy(ptr, src, 3);
 	    ptr[3] = 0xFF;
-	    src += 3;
-	    ptr += 4;
 	  }
       }
 
-  ret = 1;			/* data reading is OK */
+  ret = 1;
 
-  for (i = 0; i < *height; i++)
-    if (row_pointers[i] != NULL)
-      free(row_pointers[i]);
-
+  for (int i = 0; i < *height; i++)
+    free(row_pointers[i]);
   free(row_pointers);
 
  bugout:
