@@ -22,11 +22,11 @@
 #include <string.h>
 
 #include <jpeglib.h>
-#include "const.h"
-#include "gleem.h"
+#include "read.h"
+#include "util.h"
 
 int
-read_jpeg(FILE *infile, char *filename, int *width, int *height,
+read_jpeg(FILE *infile, const char *filename, int *width, int *height,
 	  unsigned char **rgb, unsigned char **alpha)
 {
   int ret = 0;

@@ -21,11 +21,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <png.h>
-#include "const.h"
-#include "gleem.h"
+#include "read.h"
+#include "util.h"
 
 int
-read_png(FILE *infile, char *filename, int *width, int *height,
+read_png(FILE *infile, const char *filename, int *width, int *height,
 	 unsigned char **rgb, unsigned char **alpha)
 {
   int ret = 0;

@@ -3,7 +3,9 @@
 #include <string.h>
 #include <X11/Xlib.h>
 #include <X11/Xmu/WinUtil.h>
-#include "gleem.h"
+#include "image.h"
+#include "util.h"
+#include "read.h"
 
 #define NUM_COLORS 256
 
@@ -80,7 +82,7 @@ Pixmap imageToPixmap(Display * dpy, struct image *image, int scr, Window win)
   int width = image->width, height = image->height, area = image->area;
   Pixmap pixmap = XCreatePixmap(dpy, win, width, height, depth);
 
-  char *pixmap_data;
+  char *pixmap_data = NULL;
   switch (depth)
     {
     case 32:
@@ -126,7 +128,7 @@ Pixmap imageToPixmap(Display * dpy, struct image *image, int scr, Window win)
 	for (int i = 0; i < NUM_COLORS; i++)
 	  {
 	    // find the closest color in the colormap
-	    double distance, distance_squared, min_distance;
+	    double distance, distance_squared, min_distance = 0;
 	    for (int ii = 0; ii < NUM_COLORS; ii++)
 	      {
 		distance = colors[ii].red - ((i & 0xe0) << 8);
@@ -311,7 +313,7 @@ void resize_background(struct image *image, const int w, const int h)
 }
 
 
-void crop_image(struct image *image,
+static void crop_image(struct image *image,
 	   unsigned int x, unsigned int y,
 	   unsigned int w, unsigned int h)
 {
