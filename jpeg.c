@@ -23,9 +23,11 @@
 
 #include <jpeglib.h>
 #include "const.h"
+#include "gleem.h"
 
 int
-read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
+read_jpeg(FILE *infile, char *filename, int *width, int *height,
+	  unsigned char **rgb, unsigned char **alpha)
 {
   int ret = 0;
   struct jpeg_decompress_struct cinfo;
@@ -41,42 +43,32 @@ read_jpeg(FILE *infile, int *width, int *height, unsigned char **rgba)
   if (cinfo.output_width >= MAX_DIMENSION
       || cinfo.output_height >= MAX_DIMENSION)
     {
-      fprintf(stderr, "Unreasonable dimension found in image file\n");
+      fprintf(stderr, "Unreasonable dimension found in image file %s\n",
+	      filename);
       goto bugout;
     }
 
   *width = cinfo.output_width;
   *height = cinfo.output_height;
 
-  if ((*rgba = malloc(4 * cinfo.output_width * cinfo.output_height)) == NULL)
-    abort();
+  *rgb = xmalloc(3 * cinfo.output_width * cinfo.output_height);
+  *alpha = NULL;
 
-  unsigned char *ptr = *rgba;
+  unsigned char *ptr = *rgb;
   if (cinfo.output_components == 3)
-    {
-      while (cinfo.output_scanline < cinfo.output_height)
-	{
-	  unsigned char *src = ptr + cinfo.output_width;
-
-	  jpeg_read_scanlines(&cinfo, &src, 1);
-	  for (int i = cinfo.output_width; i--; ptr += 4, src += 3)
-	    {
-	      memmove(&ptr[0], src, 3);
-	      ptr[3] = 0xFF;
-	    }
-	}
-    }
+    while (cinfo.output_scanline < cinfo.output_height)
+      {
+	jpeg_read_scanlines(&cinfo, &ptr, 1);
+	ptr += 3 * cinfo.output_width;
+      }
   else if (cinfo.output_components == 1)
     while (cinfo.output_scanline < cinfo.output_height)
       {
-	unsigned char *src = ptr + 3 * cinfo.output_width;
+	unsigned char *src = ptr + 2 * cinfo.output_width;
 
 	jpeg_read_scanlines(&cinfo, &src, 1);
-	for (int i = cinfo.output_width; i--; ptr += 4, src++)
-	  {
-	    memset(ptr, *src, 3);
-	    ptr[3] = 0xFF;
-	  }
+	for (int i = cinfo.output_width; i--; ptr += 3, src++)
+	  memset(ptr, *src, 3);
       }
 
   jpeg_finish_decompress(&cinfo);

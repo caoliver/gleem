@@ -22,9 +22,11 @@
 #include <stdlib.h>
 #include <png.h>
 #include "const.h"
+#include "gleem.h"
 
 int
-read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
+read_png(FILE *infile, char *filename, int *width, int *height,
+	 unsigned char **rgb, unsigned char **alpha)
 {
   int ret = 0;
 
@@ -33,7 +35,6 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   png_bytepp row_pointers;
   png_uint_32 w, h;
   int bit_depth, color_type, interlace_type;
-  int has_alpha;
 
   if (!(png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING,
 					 (png_voidp) NULL,
@@ -58,15 +59,18 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
   /* Protect against integer overflow */
   if (w >= MAX_DIMENSION || h >= MAX_DIMENSION)
     {
-      fprintf(stderr, "Unreasonable dimension found in image file\n");
+      fprintf(stderr, "Unreasonable dimension found in image file %s\n",
+	      filename);
       goto bugout;
     }
 
   *width = (int) w;
   *height = (int) h;
 
-  has_alpha = (color_type == PNG_COLOR_TYPE_RGB_ALPHA
-	       || color_type == PNG_COLOR_TYPE_GRAY_ALPHA);
+  *alpha = NULL;
+  if (color_type == PNG_COLOR_TYPE_RGB_ALPHA
+      || color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+    *alpha = xmalloc(*width * *height);
 
   if (color_type == PNG_COLOR_TYPE_PALETTE && bit_depth <= 8)
     png_set_expand(png_ptr);
@@ -80,34 +84,34 @@ read_png(FILE *infile, int *width, int *height, unsigned char **rgba)
 
   png_set_packing(png_ptr);
 
-  if ((row_pointers = malloc(*height * sizeof(png_bytep))) == NULL)
-    abort();
+  row_pointers = xmalloc(*height * sizeof(png_bytep));
 
   for (int i = 0; i < *height; i++)
-    if ((row_pointers[i] = malloc((has_alpha ? 4 : 3) * *width)) == NULL)
-      abort();
+    row_pointers[i] = xmalloc((*alpha ? 4 : 3) * *width);
 
   png_read_image(png_ptr, row_pointers);
 
-  if ((*rgba = malloc(4 * *width * *height)) == NULL)
-    abort();
+  *rgb = xmalloc(3 * *width * *height);
 
-  unsigned char *ptr = *rgba;
-  if (has_alpha)
+  unsigned char *ptr = *rgb;
+  unsigned char *alpha_ptr = *alpha;
+  if (*alpha == NULL)
     for (int i = 0; i < *height; i++)
       {
-	memcpy(ptr, row_pointers[i], 4 * *width);
-	ptr += 4 * *width;
+	memcpy(ptr, row_pointers[i], 3 * *width);
+	ptr += 3 * *width;
       }
   else
     for (int i = 0; i < *height; i++)
       {
 	unsigned char *src = row_pointers[i];
 
-	for (int j = *width; j--; src += 3, ptr += 4)
+	for (int j = *width; j--;)
 	  {
-	    memcpy(ptr, src, 3);
-	    ptr[3] = 0xFF;
+	    *ptr++ = *src++;
+	    *ptr++ = *src++;
+	    *ptr++ = *src++;
+	    *alpha_ptr++ = *src++;
 	  }
       }
 
