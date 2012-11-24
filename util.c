@@ -1,14 +1,24 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
-void *xmalloc(size_t size)
+void *xrealloc(void *oldptr, size_t size)
 {
   static char errmsg[] = "Memory exhausted!\n";
-  void *newptr = malloc(size);
+	
+  void *newptr = realloc(oldptr, size);
   if (newptr)
     return newptr;
   
   write(2, errmsg, sizeof(errmsg)-1);
   sleep(5);
   abort();
+}
+
+void *xcalloc(size_t elts, size_t size)
+{
+  size_t bytes = elts * size;
+  void *newptr = xrealloc(NULL, bytes);
+  memset(newptr, 0, bytes);
+  return newptr;
 }
