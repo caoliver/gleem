@@ -28,3 +28,4 @@ char *read_cfg_error(void);
 void free_cfg(struct cell *);
 void free_symbols();
 const char *intern_string(const char *);
+struct cell *assoc_key(struct cell *list, const char *key);

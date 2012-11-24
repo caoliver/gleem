@@ -349,6 +349,12 @@ struct cell *read_cfg_file(const char *filename)
   return result;
 }
 
+
+void free_cfg(struct cell *cfg)
+{
+  free_cell(cfg);
+}
+
 KHASH_SET_INIT_STR(symbol_table)
 khash_t(symbol_table) *symbols;
 
@@ -384,7 +390,20 @@ void free_symbols()
     }
 }
 
-void free_cfg(struct cell *cfg)
+struct cell *assoc_key(struct cell *list, const char *key)
 {
-  free_cell(cfg);
+  for (; IS_CONS(list); list = CDR(list))
+    {
+      struct cell *car = CAR(list);
+
+      if (IS_CONS(car) && IS_ATOM(CAR(car)) && key == ATOM_NAME(CAR(car)))
+	{
+	  struct cell *new = alloc_cell(CONS);
+	  CAR(new) = CDR(car);
+	  CDR(new) = CDR(list);
+	  return new;
+	}
+    }
+
+  return NULL;
 }
