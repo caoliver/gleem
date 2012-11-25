@@ -1,3 +1,7 @@
+// atomizer - A trivial sexpr parser for configuration files.
+//
+// Christopher Oliver - November 24, 2012
+
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -8,7 +12,9 @@
 #include "khash.h"
 #include "atomizer.h"
 
-static char *err_msg;
+static char err_msg[80];
+static int line_number = 1;
+static const char *this_file;
 
 static struct cell *alloc_cell(int type)
 {
@@ -19,10 +25,14 @@ static struct cell *alloc_cell(int type)
 
 jmp_buf panic;
 
+#define SET_ERR_MSG(MSG, LINE) \
+  snprintf(err_msg, 80, "%s : line %d of %s", MSG, LINE, this_file)
+
 #define DIE_IF_FILE_ERROR(ERRFILE)		\
   if (ferror(ERRFILE))				\
     {						\
-      err_msg = strerror(errno);		\
+      snprintf(err_msg, 80, "%s : file %s ",	\
+	       strerror(errno), this_file);	\
       longjmp(panic, 1);			\
     }
 
@@ -31,11 +41,17 @@ static int skip_whitespace(FILE *file)
   int c;
 
   while ((c = getc(file)) != EOF)
-    if (!isspace(c))
-      {
-	ungetc(c, file);
-	return 1;
-      }
+    {
+      if (!isspace(c))
+	{
+	  ungetc(c, file);
+	  return 1;
+	}
+
+      if (c == '\n')
+	line_number++;
+    }
+  
 
   DIE_IF_FILE_ERROR(file);
   return 0;
@@ -47,7 +63,10 @@ static int skip_comment(FILE *file)
 
   while ((c = getc(file)) != EOF)
     if (c == '\n')
-      return 1;
+      {
+	line_number++;
+	return 1;
+      }
   
   DIE_IF_FILE_ERROR(file);
   return 0;
@@ -68,12 +87,12 @@ void add_to_readbuf(int c)
   readbuf[readbuf_used++] = c;
 }
 
-static struct cell *readbuf_to_atom()
+static struct cell *readbuf_to_atom(int line)
 {
   readbuf[readbuf_used++] = 0;
   struct cell *new = alloc_cell(ATOM);
-  const char *str = intern_string(readbuf);
-  ATOM_NAME(new) = str;
+  ATOM_NAME(new) = intern_string(readbuf);
+  ATOM_LINE(new) = line;
   readbuf_used = 0;
   return new;
 }
@@ -107,6 +126,7 @@ static struct cell *read_string(FILE *file)
 {
   int digit, cvtval, escaped = 0, hex = 0, oct = 0;
   char *specials = "\a\b\f\n\t\r\v", *normals = "abfntrv";
+  int starting_line = line_number;
 
   while (1)
     {
@@ -126,7 +146,7 @@ static struct cell *read_string(FILE *file)
 		      cvtval = digit - 1;
 		      continue;
 		    }
-		  err_msg = "Invalid hex digit";
+		  SET_ERR_MSG("Invalid hex digit", line_number);
 		  longjmp(panic, 1);
 		case 2:
 		  if (digit)
@@ -165,12 +185,17 @@ static struct cell *read_string(FILE *file)
       switch(c)
 	{
 	case EOF:
-	  err_msg = "Unterminated string";
+	  SET_ERR_MSG("Unterminated string", starting_line);
 	  longjmp(panic, 1);
 	case '"':
 	  if (!escaped)
-	    return readbuf_to_atom();
+	    return readbuf_to_atom(starting_line);
 	  add_to_readbuf(c);
+	  break;
+	case '\n':
+	  line_number++;
+	  add_to_readbuf(c);
+	  escaped = 0;
 	  break;
 	case '0':
 	case '1':
@@ -223,7 +248,7 @@ static struct cell *read_string(FILE *file)
 	default:
 	  if (escaped)
 	    {
-	      err_msg = "Invalid escape";
+	      SET_ERR_MSG("Invalid escape", line_number);
 	      longjmp(panic, 1);
 	    }
 	  add_to_readbuf(c);
@@ -234,9 +259,11 @@ static struct cell *read_string(FILE *file)
 static struct cell *read_atom(FILE *file)
 {
   int done = 0;
+  int c;
+
   do
     {
-      int c = getc(file);
+      c = getc(file);
       if (!(done = (isspace(c) || c == EOF)))
 	switch(c)
 	  {
@@ -250,7 +277,7 @@ static struct cell *read_atom(FILE *file)
 	  }
     }
   while (!done);
-  return readbuf_to_atom();
+  return readbuf_to_atom(c == '\n' ? line_number++ : line_number);
 }
 
 static struct cell *read_cell(FILE *file);
@@ -259,6 +286,7 @@ static struct cell *read_list(FILE *file, int need_close)
 {
   struct cell *head = NULL, **tail = &head;
   struct cell *last_read;
+  int starting_line = line_number;
 
   while ((last_read = read_cell(file)))
     {
@@ -274,7 +302,7 @@ static struct cell *read_list(FILE *file, int need_close)
   if (!need_close || getc(file) == ')')
     return head;
 
-  err_msg = "Missing closing parenthesis";
+  SET_ERR_MSG("Missing closing parenthesis but starts at", starting_line);
   longjmp(panic, 1);
 }
 
@@ -316,12 +344,15 @@ static int hash_exists;
 
 static void free_cell(struct cell *cell)
 {
+  if (IS_NIL(cell))
+    return;
+
   // Don't do atoms; the names live in the hash table.
   switch (CELL_TYPE(cell))
     {
     case CONS:
-      free(CAR(cell));
-      free(CDR(cell));
+      free_cell(CAR(cell));
+      free_cell(CDR(cell));
       break;
     }
 
@@ -335,9 +366,11 @@ struct cell *read_cfg_file(const char *filename)
 
   if (filename && !(file = fopen(filename, "r")))
     {
-      err_msg = strerror(errno);
+      snprintf(err_msg, 80, "%s: file %s", strerror(errno), filename);
       return NULL;
     }
+
+  this_file = filename ? filename : "*STDIN*";
 
   // We leak allocs on error, but we're going to exit anyhow.
   if (setjmp(panic))

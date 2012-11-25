@@ -13,7 +13,8 @@ void show(struct cell *cell, int indent, int suppress)
   if (IS_ATOM(cell))
     {
       char outbuf[1024];
-      sprintf(outbuf, "%lx '%s'\n", (long)ATOM_NAME(cell), ATOM_NAME(cell));
+      sprintf(outbuf, "%d %lx '%s'\n",
+	      ATOM_LINE(cell), (long)ATOM_NAME(cell), ATOM_NAME(cell));
       write(1, outbuf, strlen(outbuf));
       return;
     }

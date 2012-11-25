@@ -1,3 +1,6 @@
+// atomizer - A trivial sexpr parser for configuration files.
+//
+// Christopher Oliver - November 24, 2012
 #define NIL 0
 #define ATOM 1
 #define CONS 2
@@ -5,7 +8,9 @@
 #define IS_NIL(CELL) ((CELL)->type == NIL)
 #define IS_CONS(CELL) ((CELL)->type == CONS)
 #define IS_ATOM(CELL) ((CELL)->type == ATOM)
-#define ATOM_NAME(CELL) ((CELL)->value.atom)
+#define ATOM_NAME(CELL) ((CELL)->value.atom.name)
+#define ATOM_LINE(CELL) ((CELL)->value.atom.line)
+#define ATOM_FLAGS(CELL) ((CELL)->value.atom.flags)
 #define CELL_TYPE(CELL) ((CELL)->type)
 #define CAR(CELL) ((CELL)->value.cons.car)
 #define CDR(CELL) ((CELL)->value.cons.cdr)
@@ -19,7 +24,10 @@ struct cell {
     struct {
       struct cell *car, *cdr;
     } cons;
-    const char *atom;
+    struct {
+      int line, flags;
+      const char *name;
+    } atom;
   } value;
 };
 
