@@ -1,3 +1,9 @@
+GPATH
+GRTAGS
+GTAGS
+HTML
+xdm-1.1.11/*
+slim/*
 *.png
 *.jpg
 *.jpeg
