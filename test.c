@@ -77,6 +77,7 @@ void do_stuff()
   resize_background(&bg, 1024, 768);
   pixmap = imageToPixmap(dpy, &bg, scrid, wid);
   XSetWindowBackgroundPixmap(dpy, wid, pixmap);
+  XFreePixmap(dpy, pixmap);
   XClearWindow(dpy,wid);
 
   read_image("panel.png", &pan);
@@ -85,6 +86,7 @@ void do_stuff()
   pixmap = imageToPixmap(dpy, &pan, scrid, pwid);
   free_image_buffers(&pan);
   XSetWindowBackgroundPixmap(dpy, pwid, pixmap);
+  XFreePixmap(dpy, pixmap);
 
   XMapWindow(dpy, pwid);
   XMapWindow(dpy, wid);

@@ -75,6 +75,7 @@ static int InitGreet(struct display *d, struct image *background)
   win = RootWindow(dpy, scr);
   pixmap = imageToPixmap(dpy, background, scr, win);
   XSetWindowBackgroundPixmap(dpy, win, pixmap);
+  XFreePixmap(dpy, pixmap);
   XClearWindow(dpy,win);
 }
 
@@ -163,6 +164,7 @@ greet_user_rtn GreetUser(
     panel_pixmap = imageToPixmap(dpy, &panel, scr, panel_win);
     free_image_buffers(&panel);
     XSetWindowBackgroundPixmap(dpy, panel_win, panel_pixmap);
+    XFreePixmap(dpy, panel_pixmap);
     XMapWindow(dpy, panel_win);
 
     XFlush(dpy);
