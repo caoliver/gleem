@@ -1,4 +1,4 @@
-// atomizer - A trivial sexpr parser for configuration files.
+// atomizer - A trivial sexpr reader for configuration files.
 //
 // Christopher Oliver - November 24, 2012
 
@@ -28,12 +28,11 @@ jmp_buf panic;
 #define SET_ERR_MSG(MSG, LINE) \
   snprintf(err_msg, 80, "%s : line %d of %s", MSG, LINE, this_file)
 
-#define DIE_IF_FILE_ERROR(ERRFILE)		\
-  if (ferror(ERRFILE))				\
-    {						\
-      snprintf(err_msg, 80, "%s : file %s ",	\
-	       strerror(errno), this_file);	\
-      longjmp(panic, 1);			\
+#define DIE_IF_FILE_ERROR(FILE)				\
+  if (ferror(FILE))					\
+    {							\
+      SET_ERR_MSG(strerror(errno), line_number);	\
+      longjmp(panic, 1);				\
     }
 
 static int skip_whitespace(FILE *file)
@@ -135,65 +134,67 @@ static struct cell *read_string(FILE *file)
     {
       int c = getc(file);
 
-      if (c != EOF)
+      if (c == EOF)
 	{
-	  if (hex)
+	  DIE_IF_FILE_ERROR(file);
+	  SET_ERR_MSG("Unterminated string", starting_line);
+	  longjmp(panic, 1);
+	}
+
+      if (hex)
+	{
+	  digit = c <= 'f' ? hex_table[c] : 0;
+	  switch (hex)
 	    {
-	      digit = c <= 'f' ? hex_table[c] : 0;
-	      switch (hex)
-		{
-		case 1:
-		  if (digit)
-		    {
-		      hex++;
-		      cvtval = digit - 1;
-		      continue;
-		    }
-		  SET_ERR_MSG("Invalid hex digit", line_number);
-		  longjmp(panic, 1);
-		case 2:
-		  if (digit)
-		    {
-		      cvtval = (cvtval << 8) | (digit - 1);
-		      add_to_readbuf(cvtval);
-		      hex = 0;
-		      continue;
-		    }
-		  add_to_readbuf(cvtval);
-		  hex = 0;
-		}
-	    }
-	  else if (oct)
-	    {
-	      digit = (c < '0' || c > '7') ? 0 : c - '0' + 1;
+	    case 1:
 	      if (digit)
 		{
-		  cvtval = (cvtval << 3) | (digit - 1);
-		  switch (oct)
-		    {
-		    case 1:
-		      oct++;
-		      continue;
-		    case 2:
-		      add_to_readbuf(cvtval & 0x0FF);
-		      oct = 0;
-		      continue;
-		    }
+		  hex++;
+		  cvtval = digit - 1;
+		  continue;
 		}
-	      add_to_readbuf(cvtval & 0x0FF);
-	      oct = 0;
+	      SET_ERR_MSG("Invalid hex digit", line_number);
+	      longjmp(panic, 1);
+	    case 2:
+	      if (digit)
+		{
+		  cvtval = (cvtval << 8) | (digit - 1);
+		  add_to_readbuf(cvtval);
+		  hex = 0;
+		  continue;
+		}
+	      add_to_readbuf(cvtval);
+	      hex = 0;
 	    }
+	}
+      else if (oct)
+	{
+	  digit = (c < '0' || c > '7') ? 0 : c - '0' + 1;
+	  if (digit)
+	    {
+	      cvtval = (cvtval << 3) | (digit - 1);
+	      switch (oct)
+		{
+		case 1:
+		  oct++;
+		  continue;
+		case 2:
+		  add_to_readbuf(cvtval & 0x0FF);
+		  oct = 0;
+		  continue;
+		}
+	    }
+	  add_to_readbuf(cvtval & 0x0FF);
+	  oct = 0;
 	}
 
       switch(c)
 	{
-	case EOF:
-	  SET_ERR_MSG("Unterminated string", starting_line);
-	  longjmp(panic, 1);
 	case '"':
 	  if (!escaped)
 	    return readbuf_to_atom(starting_line);
 	  add_to_readbuf(c);
+	  escaped = 0;
 	  break;
 	case '\n':
 	  line_number++;
@@ -229,7 +230,7 @@ static struct cell *read_string(FILE *file)
 	case 'r':
 	case 't':
 	case 'v':
-	  add_to_readbuf(escaped ? specials[normals - strchr(normals, c)] : c);
+	  add_to_readbuf(escaped ? specials[strchr(normals, c) - normals] : c);
 	  escaped = 0;
 	  break;
 	case 'x':
@@ -280,6 +281,9 @@ static struct cell *read_atom(FILE *file)
 	  }
     }
   while (!done);
+  if (c == EOF)
+    DIE_IF_FILE_ERROR(file);
+
   return readbuf_to_atom(c == '\n' ? line_number++ : line_number);
 }
 
@@ -323,6 +327,7 @@ static struct cell *read_cell(FILE *file)
     case ')':
       ungetc(c, file);
     case EOF:
+      DIE_IF_FILE_ERROR(file);
       return NULL;
     case ';':
       skip_comment(file);
@@ -372,7 +377,7 @@ struct cell *read_cfg_file(const char *filename)
 
   if (filename && !(file = fopen(filename, "r")))
     {
-      snprintf(err_msg, 80, "%s: file %s", strerror(errno), filename);
+      snprintf(err_msg, 80, "%s: %s", strerror(errno), filename);
       return NULL;
     }
 

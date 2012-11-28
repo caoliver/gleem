@@ -1,6 +1,7 @@
-// atomizer - A trivial sexpr parser for configuration files.
+// atomizer - A trivial sexpr reader for configuration files.
 //
 // Christopher Oliver - November 24, 2012
+
 #define NIL 0
 #define ATOM 1
 #define CONS 2
