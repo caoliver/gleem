@@ -13,8 +13,6 @@
 
 #include "image.h"
 
-static Display *dpy;
-
 /*
  * Function pointers filled in by the initial call ito the library
  */
@@ -57,29 +55,20 @@ pam_handle_t **(*__xdm_thepamhp)(void) = NULL;
 # endif
 
 
-static int InitGreet(struct display *d, struct image *background)
+static Display *InitGreet(struct display *d, struct image *background)
 {
   Pixmap pixmap;
-  int scr, win;
+  int win;
+  Display *dpy;
 
   if (!(dpy = XOpenDisplay(d->name)))
     return 0;
-
   RegisterCloseOnFork(ConnectionNumber(dpy));
   SecureDisplay(d, dpy);
-  scr = DefaultScreen(dpy);
-  read_image("background.jpg", background);
-  resize_background(background,
-		    WidthOfScreen(ScreenOfDisplay(dpy, scr)),
-		    HeightOfScreen(ScreenOfDisplay(dpy, scr)));
-  win = RootWindow(dpy, scr);
-  pixmap = imageToPixmap(dpy, background, scr, win);
-  XSetWindowBackgroundPixmap(dpy, win, pixmap);
-  XFreePixmap(dpy, pixmap);
-  XClearWindow(dpy,win);
+  return dpy;
 }
 
-static void CloseGreet(struct display *d)
+static void CloseGreet(struct display *d, Display *dpy)
 {
   UnsecureDisplay(d, dpy);
   ClearCloseOnFork(XConnectionNumber(dpy));
@@ -99,8 +88,10 @@ greet_user_rtn GreetUser(
     Arg         arglist[2];
     struct image background, panel;
     int scr;
-    Window panel_win;
-    Pixmap panel_pixmap;
+    Window root_win, panel_win;
+    Pixmap pixmap;
+    static Display *dpy;
+
 
     // Stop program for debugging.
     //    raise(SIGSTOP);
@@ -146,7 +137,7 @@ greet_user_rtn GreetUser(
     __xdm_thepamhp = dlfuncs->_thepamhp;
 # endif
 
-    if (!InitGreet(d, &background))
+    if (!(dpy = InitGreet(d, &background)))
       {
 	LogError ("Cannot reopen display %s for greet window\n", d->name);
         exit (RESERVER_DISPLAY);
@@ -155,20 +146,36 @@ greet_user_rtn GreetUser(
 #define XOFF 50
 #define YOFF 500
 
+    scr = DefaultScreen(dpy);
+    read_image("background.jpg", &background);
+    resize_background(&background,
+		      WidthOfScreen(ScreenOfDisplay(dpy, scr)),
+		      HeightOfScreen(ScreenOfDisplay(dpy, scr)));
+    root_win = RootWindow(dpy, scr);
+    pixmap = imageToPixmap(dpy, &background, scr, root_win);
+    XSetWindowBackgroundPixmap(dpy, root_win, pixmap);
+    XFreePixmap(dpy, pixmap);
+    XClearWindow(dpy,root_win);
+
+    panel_win = XCreateSimpleWindow(dpy, root_win,
+    				   XOFF, YOFF, 587, 235, 0, 0, 255);
     read_image("panel.png", &panel);
     merge_with_background(&panel, &background, XOFF, YOFF);
     free_image_buffers(&background);
-    scr = DefaultScreen(dpy);
-    panel_win = XCreateSimpleWindow(dpy, RootWindow(dpy, scr),
-    				   XOFF, YOFF, 587, 235, 0, 0, 255);
-    panel_pixmap = imageToPixmap(dpy, &panel, scr, panel_win);
+    pixmap = imageToPixmap(dpy, &panel, scr, panel_win);
     free_image_buffers(&panel);
-    XSetWindowBackgroundPixmap(dpy, panel_win, panel_pixmap);
-    XFreePixmap(dpy, panel_pixmap);
-    XMapWindow(dpy, panel_win);
+    XSetWindowBackgroundPixmap(dpy, panel_win, pixmap);
+    XFreePixmap(dpy, pixmap);
 
-    XFlush(dpy);
-    sleep(5);
+    for (int i=0; i < 5; i++)
+      {
+	if (~i & 1)
+	  XMapWindow(dpy, panel_win);
+	else
+	  XUnmapWindow(dpy, panel_win);
+	XFlush(dpy);
+	sleep(1);
+      }
 
     XSelectInput(dpy, RootWindow(dpy, scr), KeyPressMask);
     XSelectInput(dpy, panel_win, ExposureMask);
@@ -178,6 +185,6 @@ greet_user_rtn GreetUser(
     pfd.events = POLLIN;
     sleep(5);
 
-    CloseGreet(d);
+    CloseGreet(d, dpy);
     return Greet_Failure;
 }

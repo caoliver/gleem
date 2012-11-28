@@ -1,5 +1,5 @@
 INCLUDES=-Ixdm-1.1.11 -Ixdm-1.1.11/include  -I/usr/include/freetype2
-CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC
+CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall -pedantic
 LDFLAGS+=-ljpeg -lpng -lX11 -lXft -ldl
 
 GOBJS=greet.o

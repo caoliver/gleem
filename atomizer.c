@@ -91,8 +91,11 @@ static struct cell *readbuf_to_atom(int line)
 {
   readbuf[readbuf_used++] = 0;
   struct cell *new = alloc_cell(ATOM);
-  ATOM_NAME(new) = intern_string(readbuf);
+  ATOM_NAME(new) = readbuf;
+  ATOM_NUMBER(new) = intern_string(&ATOM_NAME(new));
   ATOM_LINE(new) = line;
+  DYNAMIC_FLAG(new) = 0;
+  ATOM_DATA(new) = 0;
   readbuf_used = 0;
   return new;
 }
@@ -354,6 +357,9 @@ static void free_cell(struct cell *cell)
       free_cell(CAR(cell));
       free_cell(CDR(cell));
       break;
+    case ATOM:
+      if (DYNAMIC_FLAG(cell))
+	free(ATOM_DATA(cell));
     }
 
   free(cell);
@@ -388,13 +394,14 @@ void free_cfg(struct cell *cfg)
   free_cell(cfg);
 }
 
-KHASH_SET_INIT_STR(symbol_table)
+KHASH_MAP_INIT_STR(symbol_table, int)
 khash_t(symbol_table) *symbols;
 
-const char *intern_string(const char *str)
+unsigned int intern_string(const char **str)
 {
   khint_t hash_index;
   int rc;
+  static unsigned int count;
 
   if (!hash_exists)
     {
@@ -402,17 +409,28 @@ const char *intern_string(const char *str)
       symbols = kh_init(symbol_table);
     }
 
-  hash_index = kh_get(symbol_table, symbols, str);
+  hash_index = kh_get(symbol_table, symbols, *str);
   if (hash_index != kh_end(symbols))
-    return kh_key(symbols, hash_index);
-  char *hashstr = xmalloc(strlen(str));
-  strcpy(hashstr, str);
-  kh_put(symbol_table, symbols, hashstr, &rc);
-  return hashstr;
+    {
+      *str = kh_key(symbols, hash_index);
+      return kh_value(symbols, hash_index);
+    }
+  char *hashstr = xmalloc(strlen(*str));
+  *str = strcpy(hashstr, *str);
+  hash_index = kh_put(symbol_table, symbols, hashstr, &rc);
+  kh_value(symbols, hash_index) = ++count;
+  return count;
 }
 
 void free_symbols()
 {
+  if (readbuf_size)
+    {
+      readbuf_size = 0;
+      readbuf_used = 0;
+      free(readbuf);
+    }
+
   if (hash_exists)
     {
       for (khint_t k = kh_begin(symbols); k != kh_end(symbols); k++)
@@ -423,13 +441,35 @@ void free_symbols()
     }
 }
 
-struct cell *assoc_key(struct cell *list, const char *key)
+
+static __inline__ void set_atom_data(struct cell *atom, void *data, int dyn)
+{
+  if (IS_ATOM(atom))
+    {
+      if (DYNAMIC_FLAG(atom))
+	free(ATOM_DATA(atom));
+      DYNAMIC_FLAG(atom) = dyn;
+      ATOM_DATA(atom) = data;
+    }
+}
+
+void set_static_atom_data(struct cell *atom, void *data)
+{
+  set_atom_data(atom, data, 0);
+}
+
+void alloc_dynamic_atom_data(struct cell *atom, size_t size)
+{
+  set_atom_data(atom, xmalloc(size), 1);
+}
+
+struct cell *assoc_key(struct cell *list, unsigned int key)
 {
   for (; IS_CONS(list); list = CDR(list))
     {
       struct cell *car = CAR(list);
 
-      if (IS_CONS(car) && IS_ATOM(CAR(car)) && key == ATOM_NAME(CAR(car)))
+      if (IS_CONS(car) && IS_ATOM(CAR(car)) && key == ATOM_NUMBER(CAR(car)))
 	{
 	  struct cell *new = alloc_cell(CONS);
 	  CAR(new) = CDR(car);

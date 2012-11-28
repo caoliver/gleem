@@ -13,9 +13,10 @@ void show(struct cell *cell, int indent, int suppress)
   if (IS_ATOM(cell))
     {
       char outbuf[1024];
-      sprintf(outbuf, "%d %lx '%s'\n",
-	      ATOM_LINE(cell), (long)ATOM_NAME(cell), ATOM_NAME(cell));
-      write(1, outbuf, strlen(outbuf));
+      int result;
+      result = sprintf(outbuf, "%d %d '%s'\n",
+		       ATOM_LINE(cell), ATOM_NUMBER(cell), ATOM_NAME(cell));
+      write(1, outbuf, result);
       return;
     }
   if (IS_NIL(cell))
@@ -33,11 +34,21 @@ void show(struct cell *cell, int indent, int suppress)
 
 void show_intern(const char *sym)
 {
-  printf("%s at %lx\n", sym, (long)intern_string(sym));
+  int result;
+  char buf[128];
+
+  result = sprintf(buf, "%s at %lx\n", sym, (long)intern_string(&sym));
+  write(1, buf, result);
 }
 
 int main(int argc, char *argv[])
 {
+  mtrace();
+  show_intern("color");
+  show_intern("position");
+  show_intern("commands");
+  show_intern("root");
+  show_intern("gleem v0.1");
   struct cell *cfg = read_cfg_file(argv[1]);
 
   if (!cfg)

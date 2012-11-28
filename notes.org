@@ -1,0 +1,15 @@
+* Tasks done in at least a crude form:
+
+** Display text with or without shadow left/right/center wrt X,Y.
+
+** Display input buffer without shadow at X,Y with optional cursor.
+
+** Merge and display panel and background.
+
+** Decode keys.
+   -- How to handle key binds in config file?
+
+** Handle expose.
+
+** Simple config parser w. symbol table.
+
