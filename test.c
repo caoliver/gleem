@@ -24,7 +24,7 @@ void text_op(Display *dpy, Window win, int scr,
 {
   int len = strlen(str);
   XGlyphInfo extents;
-  XftTextExtents8(dpy, properties->font, str, len, &extents);
+  XftTextExtentsUtf8(dpy, properties->font, str, len, &extents);
   switch (placement)
     {
     case placement_left:
@@ -41,12 +41,12 @@ void text_op(Display *dpy, Window win, int scr,
       XftDraw *draw = XftDrawCreate(dpy, win, visual, colormap);
   
       if (properties->shadow_xoff || properties->shadow_yoff)
-	XftDrawString8(draw, &properties->shadow_color, properties->font,
+	XftDrawStringUtf8(draw, &properties->shadow_color, properties->font,
 		       x + properties->shadow_xoff,
 		       y + properties->shadow_yoff,
-		       (unsigned char *)str, len - 1);
-      XftDrawString8(draw, &properties->color,
-		     properties->font, x, y, (unsigned char *)str, len - 1);
+		       (unsigned char *)str, len);
+      XftDrawStringUtf8(draw, &properties->color,
+		     properties->font, x, y, (unsigned char *)str, len);
       XftDrawDestroy(draw);
       return;
     }
@@ -80,13 +80,28 @@ void test_tp(Display *dpy, Window win, char *str, int x, int y)
   Colormap colormap = DefaultColormap(dpy, scr);
   struct text_properties tp;
 
-  tp.font = XftFontOpenName(dpy, scr, "URW Gothic L:size=24:dpi=75");
+  tp.font = XftFontOpenName(dpy, scr, ":size=24:dpi=75");
   XftColorAllocName(dpy, visual, colormap, "#f9f9f9", &tp.color);
   XftColorAllocName(dpy, visual, colormap, "#702342", &tp.shadow_color);
   tp.shadow_yoff = tp.shadow_xoff = 1;
-  PUT_TEXT_AT(dpy, win, scr, str, x, y, placement_left, &tp);
-  PUT_TEXT_AT(dpy, win, scr, str, x, y - 36, placement_center, &tp);
-  PUT_TEXT_AT(dpy, win, scr, str, x, y - 72, placement_right, &tp);
+  for (int i = 0; i < 5; i++)
+    {
+      if (i > 0)
+	sleep(1);
+      if (~i & 1)
+	{
+	  PUT_TEXT_AT(dpy, win, scr, str, x, y, placement_left, &tp);
+	  PUT_TEXT_AT(dpy, win, scr, str, x, y - 36, placement_center, &tp);
+	  PUT_TEXT_AT(dpy, win, scr, str, x, y - 72, placement_right, &tp);
+	}
+      else
+	{
+	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y, placement_left, &tp);
+	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y - 36, placement_center, &tp);
+	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y - 72, placement_right, &tp);
+	}
+      XSync(dpy, False);
+    }
 }
 
 void show_input_at(Display *dpy, int scr, Window wid, char *str,
@@ -175,7 +190,7 @@ void do_stuff()
   XMapWindow(dpy, pwid);
   XMapWindow(dpy, wid);
 
-  XSelectInput(dpy, wid, KeyPressMask|ExposureMask);
+  XSelectInput(dpy, wid, KeyPressMask);
   XSelectInput(dpy, pwid, ExposureMask);
   struct pollfd pfd = {0};
   pfd.fd = ConnectionNumber(dpy);
@@ -183,7 +198,8 @@ void do_stuff()
 #ifdef ON_ROOT
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
 #endif
-  test_tp(dpy, wid, "Hello, world!", 300, 400);
+  char *msg = "Hello, world!\u0278";
+  //  test_tp(dpy, wid, msg, 300, 200);
 
   int again = 1;
   char out[128]="";
@@ -201,7 +217,7 @@ void do_stuff()
 	  switch(event.type)
 	    {
 	    case Expose:
-	      test_tp(dpy, wid, "Hello, world!", 300, 400);
+	      test_tp(dpy, wid, msg, 300, 200);
 	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1);
 	      break;
 	      

@@ -57,8 +57,6 @@ pam_handle_t **(*__xdm_thepamhp)(void) = NULL;
 
 static Display *InitGreet(struct display *d, struct image *background)
 {
-  Pixmap pixmap;
-  int win;
   Display *dpy;
 
   if (!(dpy = XOpenDisplay(d->name)))
@@ -84,8 +82,6 @@ greet_user_rtn GreetUser(
     struct dlfuncs        *dlfuncs)
 
 {
-    int i;
-    Arg         arglist[2];
     struct image background, panel;
     int scr;
     Window root_win, panel_win;
@@ -147,7 +143,8 @@ greet_user_rtn GreetUser(
 #define YOFF 500
 
     scr = DefaultScreen(dpy);
-    read_image("background.jpg", &background);
+    system("echo $PWD >>/root/where");
+    read_image("/root/gleem/background.jpg", &background);
     resize_background(&background,
 		      WidthOfScreen(ScreenOfDisplay(dpy, scr)),
 		      HeightOfScreen(ScreenOfDisplay(dpy, scr)));
@@ -156,10 +153,9 @@ greet_user_rtn GreetUser(
     XSetWindowBackgroundPixmap(dpy, root_win, pixmap);
     XFreePixmap(dpy, pixmap);
     XClearWindow(dpy,root_win);
-
     panel_win = XCreateSimpleWindow(dpy, root_win,
     				   XOFF, YOFF, 587, 235, 0, 0, 255);
-    read_image("panel.png", &panel);
+    read_image("/root/gleem/panel.png", &panel);
     merge_with_background(&panel, &background, XOFF, YOFF);
     free_image_buffers(&background);
     pixmap = imageToPixmap(dpy, &panel, scr, panel_win);

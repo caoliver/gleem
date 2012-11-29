@@ -3,7 +3,7 @@ CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall -pedantic
 LDFLAGS+=-ljpeg -lpng -lX11 -lXft -ldl
 
 GOBJS=greet.o
-OBJS=image.o numlock.o jpeg.o png.o util.o atomizer.o
+OBJS=image.o numlock.o jpeg.o png.o util.o
 BINS=test atomizer-test
 
 .PHONY: clean
@@ -17,10 +17,6 @@ libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
 install: libXdmGreet.so
 	mv -n /etc/X11/xdm/libXdmGreet.so /etc/X11/xdm/libXdmGreet.so~
 	cp libXdmGreet.so /etc/X11/xdm/libXdmGreet.so
-
-atomizer.o: atomizer.c khash.h
-
-atomizer-test: atomizer-test.c atomizer.o util.o
 
 clean:
 	rm -f ${BINS} ${OBJS} ${GOBJS} gmon.out libXdmGreet.so
