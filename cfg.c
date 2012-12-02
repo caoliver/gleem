@@ -2,14 +2,26 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 #include <X11/Xresource.h>
+#include <X11/XKBlib.h>
+#include <ctype.h>
 // #include "dm.h"
 #include "util.h"
 #include "cfg.h"
+#include "keywords.h"
+
+#if __STDC_VERSION__ >= 199901L
+#define INLINE_DECL inline
+#elif defined(__GNUC__)
+#define INLINE_DECL __inline
+#else
+#define INLINE_DECL
+#endif
 
 #define UNMANAGE_DISPLAY 0
 #define LogError printf
 
-static void get_cfg_boolean(XrmDatabase db, char *name, char *class,
+static void get_cfg_boolean(XrmDatabase db,
+			    const char *name, const char *class,
 			    int *valptr, int default_value)
 {
   char *type;
@@ -23,7 +35,8 @@ static void get_cfg_boolean(XrmDatabase db, char *name, char *class,
     : default_value;
 }
 
-static void get_cfg_count(XrmDatabase db, char *name, char *class,
+static void get_cfg_count(XrmDatabase db,
+			    const char *name, const char *class,
 			  int *valptr, int default_value)
 {
   char *type, *end;
@@ -46,7 +59,8 @@ static void get_cfg_count(XrmDatabase db, char *name, char *class,
   exit(UNMANAGE_DISPLAY);
 }
 
-static void get_cfg_string(XrmDatabase db, char *name, char *class,
+static void get_cfg_string(XrmDatabase db,
+			   const char *name, const char *class,
 			   char **valptr, char *default_value)
 {
   char *type;
@@ -59,31 +73,141 @@ static void get_cfg_string(XrmDatabase db, char *name, char *class,
 }
 
 #define RESOURCE_PREFIX "gleem.command."
-;
+
 #define GETCMD(TYPE, NAME, PLACE, DEFAULT)				\
-  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d."#NAME, command_id);	\
+  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d."#NAME, cmd_id);	\
   get_cfg_##TYPE(db, name, "Gleem", PLACE, DEFAULT)
 
-void get_command(XrmDatabase db, struct command *command, int command_id)
+static INLINE_DECL const char *skip_space(const char *str)
+{
+  while (isspace(*str))
+    str++;
+  return str;
+}
+
+static INLINE_DECL const char *scan_to_space(const char *str)
+{
+  while (*str && !isspace(*str))
+    str++;
+  return str;
+}
+
+static void
+parse_action(struct command *cmd, const char *action, const char *name)
+{
+  const char *str = action;
+  const char *end = scan_to_space(str);
+  switch (cmd->action = lookup_keyword(str, end - str))
+    {
+    case KW_EXEC:
+      if (*(str = skip_space(end)))
+	{
+	  cmd->action_params = xstrdup(str);
+	  break;
+	}
+      LogError("Missing command to exec in %s\n", name);
+      exit(UNMANAGE_DISPLAY);
+
+    case KW_SWITCH_SESSION:
+      cmd->action_params = *(str = skip_space(end)) ? xstrdup(str) : NULL;
+      break;
+
+    default:
+      LogError("Invalid action: %s: %s\n", name, str);
+      exit(UNMANAGE_DISPLAY);
+    }
+}
+
+static void
+parse_shortcut(Display *dpy, struct command *cmd, const char *shortcut,
+	       const char *name)
+{
+  const char *str = shortcut, *end;
+  while (*str)
+    {
+      if (!*(end = scan_to_space(str)))
+	break;
+
+      switch (lookup_keyword(str, end - str))
+	{
+	case KW_CTRL:
+	  cmd->mod_state |= ControlMask;
+	  break;
+	case KW_SHIFT:
+	  cmd->mod_state |= ShiftMask;
+	  break;
+	case KW_MOD1:
+	  cmd->mod_state |= Mod1Mask;
+	  break;
+	case KW_MOD2:
+	  cmd->mod_state |= Mod2Mask;
+	  break;
+	case KW_MOD3:
+	  cmd->mod_state |= Mod3Mask;
+	  break;
+	case KW_MOD4:
+	  cmd->mod_state |= Mod4Mask;
+	  break;
+	case KW_MOD5:
+	  cmd->mod_state |= Mod5Mask;
+	  break;
+	default:
+	  LogError("Bad modifier in %s: context = %s\n", name, str);
+	  exit(UNMANAGE_DISPLAY);
+	}
+
+      str = skip_space(end);
+    }
+
+  KeySym keysym = XStringToKeysym(str);
+  if (keysym != NoSymbol)
+    {
+      char ascii;
+      int extra;
+
+      XkbTranslateKeySym(dpy, &keysym, cmd->mod_state, &ascii, 1, &extra);
+      if (!IsModifierKey(keysym) &&
+	  (!isprint(ascii)
+	   || (ascii == ' '  && cmd->mod_state)
+	   || (cmd->mod_state & ~ShiftMask)))
+	{
+	  cmd->keysym = keysym;
+	  return;
+	}
+    }
+
+  LogError("Bad key symbol in %s: context = %s\n", name, str);
+  exit(UNMANAGE_DISPLAY);
+}
+
+static void
+get_command(Display *dpy, XrmDatabase db, struct command *cmd, int cmd_id)
 {
   static char name[48] = RESOURCE_PREFIX;
   char *type;
   XrmValue value;
 
-  GETCMD(string, action, &command->action, NULL);
-  if (!command->action)
+  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d.action", cmd_id);
+  if (!XrmGetResource(db, name, "Gleem", &type, &value))
     return;
+  parse_action(cmd, value.addr, name);
 
-  GETCMD(count, delay, &command->delay, 0);
-  GETCMD(string, name, &command->name, NULL);
-  GETCMD(string, message, &command->message, NULL);
+  GETCMD(count, delay, &cmd->delay, 0);
+  GETCMD(string, name, &cmd->name, NULL);
+  GETCMD(string, message, &cmd->message, NULL);
+  GETCMD(string, users, &cmd->allowed_users, NULL);
+
+  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d.shortcut", cmd_id);
+  if (!XrmGetResource(db, name, "Gleem", &type, &value))
+    return;
+  parse_shortcut(dpy, cmd, value.addr, name);
 }
 
-void free_command(struct command *command)
+void free_command(struct command *cmd)
 {
-  free(command->action);
-  free(command->name);
-  free(command->message);
+  free(cmd->action_params);
+  free(cmd->name);
+  free(cmd->message);
 }
 
 #define GETCFG(DB, TYPE, NAME, PLACE, DEFAULT)			\
@@ -102,6 +226,7 @@ struct cfg *read_cfg(Display *dpy)
     abort();
 
   GETCFG(db, boolean, numlock, &cfg->numlock, 0);
+  GETCFG(db, boolean, ignore-capslock, &cfg->ignore_capslock, 1);
   GETCFG(db, boolean, hide-mouse, &cfg->hide_mouse, 0);
   GETCFG(db, boolean, auto-login, &cfg->auto_login, 0);
   GETCFG(db, boolean, focus-password, &cfg->focus_password, 0);
@@ -117,7 +242,7 @@ struct cfg *read_cfg(Display *dpy)
     cfg->command_count = MAX_CMDS;
   
   for (int i = 0; i < cfg->command_count; i++)
-    get_command(db, &(cfg->commands)[i], i + 1);
+    get_command(dpy, db, &(cfg->commands)[i], i + 1);
   __asm__("int3");
   free(themes);
   free(theme_directory);

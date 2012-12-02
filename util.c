@@ -23,7 +23,7 @@ void *xcalloc(size_t elts, size_t size)
   return newptr;
 }
 
-char *xstrdup(char *str)
+char *xstrdup(const char *str)
 {
   int len = strlen(str);
   char *new = xrealloc(NULL, len + 1);

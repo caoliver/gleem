@@ -12,7 +12,8 @@
 %readonly-tables
 %language=ANSI-C
 %define hash-function-name keyword_hash
-%define lookup-function-name lookup_keyword_internal
+%define lookup-function-name lookup_keyword
+%compare-strncmp
 struct keyword { char *name; int code; };
 %%
 mod1, KW_MOD1
@@ -31,8 +32,3 @@ shift, KW_SHIFT
 s, KW_SHIFT
 exec, KW_EXEC
 switch-session, KW_SWITCH_SESSION
-%%
-unsigned int lookup_keyword(const char *keyword)
-{
-  return lookup_keyword_internal(keyword, strlen(keyword));
-}

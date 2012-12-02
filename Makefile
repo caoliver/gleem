@@ -11,7 +11,7 @@ BINS=test testcfg
 test: ${OBJS} test.c
 	 gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
 
-testcfg: ${OBJS}
+testcfg: cfg.o util.o keywords.o
 	 gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
 
 libXdmGreet.so: greet.o ${OBJS} ${GOBJS}

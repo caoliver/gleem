@@ -3,15 +3,17 @@
 
 struct command {
   char *name;
-  char *action;  // Keyword whitespace [optional params]
+  int action;  // Keyword whitespace [optional params]
+  char *action_params;
   int delay;
   char *message;
   KeySym keysym;
-  unsigned mod_mask, mod_state;
+  unsigned mod_state;
+  char *allowed_users;
 };
 
 struct cfg {
-  int numlock, hide_mouse;
+  int numlock, ignore_capslock, hide_mouse;
   int auto_login, focus_password;
   char *default_user;
   char *welcome_message;
