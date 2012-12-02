@@ -22,3 +22,10 @@ void *xcalloc(size_t elts, size_t size)
   memset(newptr, 0, bytes);
   return newptr;
 }
+
+char *xstrdup(char *str)
+{
+  int len = strlen(str);
+  char *new = xrealloc(NULL, len + 1);
+  return strcpy(new, str);
+}

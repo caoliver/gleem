@@ -11,6 +11,7 @@
 
 #include <poll.h>
 
+#include "cfg.h"
 #include "image.h"
 
 /*
@@ -87,6 +88,7 @@ greet_user_rtn GreetUser(
     Window root_win, panel_win;
     Pixmap pixmap;
     static Display *dpy;
+    struct cfg *cfg;
 
 
     // Stop program for debugging.
@@ -139,11 +141,12 @@ greet_user_rtn GreetUser(
         exit (RESERVER_DISPLAY);
       }
 
-#define XOFF 50
-#define YOFF 500
-
     scr = DefaultScreen(dpy);
-    system("echo $PWD >>/root/where");
+    
+    cfg = read_cfg(dpy);
+
+    // Trial junk below here.
+
     read_image("/root/gleem/background.jpg", &background);
     resize_background(&background,
 		      WidthOfScreen(ScreenOfDisplay(dpy, scr)),
@@ -154,9 +157,9 @@ greet_user_rtn GreetUser(
     XFreePixmap(dpy, pixmap);
     XClearWindow(dpy,root_win);
     panel_win = XCreateSimpleWindow(dpy, root_win,
-    				   XOFF, YOFF, 587, 235, 0, 0, 255);
+    				   50, 500, 587, 235, 0, 0, 255);
     read_image("/root/gleem/panel.png", &panel);
-    merge_with_background(&panel, &background, XOFF, YOFF);
+    merge_with_background(&panel, &background, 50, 050);
     free_image_buffers(&background);
     pixmap = imageToPixmap(dpy, &panel, scr, panel_win);
     free_image_buffers(&panel);

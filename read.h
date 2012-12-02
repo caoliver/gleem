@@ -9,4 +9,4 @@ int read_jpeg(FILE *infile, const char *filename, int *width, int *height,
 int read_png(FILE *infile, const char *filename, int *width, int *height,
           unsigned char **rgb, unsigned char **alpha);
 
-#endif
+#endif /* _READ_H_ */

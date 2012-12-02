@@ -240,7 +240,7 @@ Pixmap imageToPixmap(Display * dpy, struct image *image, int scr, Window win)
     TAG##_##OUT##_err += TAG##_jump;		\
   }						\
   else						\
-    TAG##_##OUT##_err += TAG##_no_jump;	\
+    TAG##_##OUT##_err += TAG##_no_jump;		\
     OUT += TAG##_int_slope;
 
 

@@ -13,4 +13,5 @@ Pixmap imageToPixmap(Display *dpy, struct image *image, int scr, Window win);
 void resize_background(struct image *image, const int w, const int h);
 void merge_with_background(struct image *panel, struct image *background,
 			   unsigned int xoffset, unsigned int yoffset);
-#endif
+
+#endif /* _IMAGE_H_ */

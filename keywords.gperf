@@ -1,0 +1,38 @@
+%{
+#include <string.h>
+#include "keywords.h"
+#if __STDC_VERSION__ >= 199901L
+#define INLINE_DECL inline
+#elif defined(__GNUC__)
+#define INLINE_DECL __inline
+#else
+#define INLINE_DECL
+#endif
+%}
+%readonly-tables
+%language=ANSI-C
+%define hash-function-name keyword_hash
+%define lookup-function-name lookup_keyword_internal
+struct keyword { char *name; int code; };
+%%
+mod1, KW_MOD1
+m1, KW_MOD1
+mod2, KW_MOD2
+m2, KW_MOD2
+mod3, KW_MOD3
+m3, KW_MOD3
+mod4, KW_MOD4
+m4, KW_MOD4
+mod5, KW_MOD5
+m5, KW_MOD5
+ctrl, KW_CTRL
+c, KW_CTRL
+shift, KW_SHIFT
+s, KW_SHIFT
+exec, KW_EXEC
+switch-session, KW_SWITCH_SESSION
+%%
+unsigned int lookup_keyword(const char *keyword)
+{
+  return lookup_keyword_internal(keyword, strlen(keyword));
+}

@@ -24,14 +24,15 @@ void text_op(Display *dpy, Window win, int scr,
 {
   int len = strlen(str);
   XGlyphInfo extents;
-  XftTextExtentsUtf8(dpy, properties->font, str, len, &extents);
+  XftTextExtentsUtf8(dpy, properties->font,
+		     (unsigned char *)str, len, &extents);
   switch (placement)
     {
     case placement_left:
       x -= extents.width;
       break;
     case placement_center:
-      x -= extents.width / 2;      
+      x -= extents.width / 2;
     }
 
   if (draw_it)
@@ -104,20 +105,22 @@ void test_tp(Display *dpy, Window win, char *str, int x, int y)
     }
 }
 
+#define TSIZE "16"
+#define CURSOR_PIXELS 3
+
 void show_input_at(Display *dpy, int scr, Window wid, char *str,
-		   int x, int y, int w, int h, int cursor)
+		   int x, int y, int w, int h, int cursor,
+		   unsigned char secret_mask)
 {
   Visual* visual = DefaultVisual(dpy, scr);
   Colormap colormap = DefaultColormap(dpy, scr);
 
   XftFont *font;
-  XftColor color;
-
-#define TSIZE "16"
-#define CURSOR_PIXELS 3
-
+  XftColor color, color2;
+  int star_width;
   XClearArea(dpy, wid, x, y - h, w, h, False);
   XftColorAllocName(dpy, visual, colormap, "#702342", &color);
+  XftColorAllocName(dpy, visual, colormap, "#a05372", &color2);
   font = XftFontOpenName(dpy, scr, "URW Gothic:size=" TSIZE);
   XftDraw *draw = XftDrawCreate(dpy, wid, visual, colormap);
   XGlyphInfo extents;
@@ -125,30 +128,57 @@ void show_input_at(Display *dpy, int scr, Window wid, char *str,
   XftTextExtents8(dpy, font, (unsigned char *)"|", 1, &extents);
   int bump = extents.height - extents.y;
   int right_margin = cursor ? 5 - extents.width : 1;
-  // Make sure to show some cursor movement for trailing space
-  // since Xft doesn't seem to.
-  if (cursor && len > 0 && str[len - 1] == ' ')
+  if (secret_mask)
     {
-      XftTextExtents8(dpy, font, (unsigned char *)"  ", 2, &extents);
-      right_margin += extents.width;
+      XftTextExtents8(dpy, font, &secret_mask, 1, &extents);
+      star_width = extents.width + (extents.width >> 3);
+      if (star_width < 8)
+	star_width += 2;
+      int extras =
+	((len + 1) * star_width - 1 + right_margin + CURSOR_PIXELS - w)
+	/ star_width;
+      if (extras < 0)
+	extras = 0;
+      if (extents.width > 0)
+	for (int i = extras; i < len; i++, x += star_width)
+	  XftDrawString8(draw, (i % 8 < 4) ? &color : &color2,
+			 font, x, y - bump, &secret_mask, 1);
+      else
+	x += star_width * (len - extras);
+
+      if (cursor)
+	XftDrawRect(draw, &color, x + right_margin, y - h + 1,
+		    CURSOR_PIXELS, h - 1);
     }
-  int too_long;
-  do
+  else
     {
-      XftTextExtents8(dpy, font, (unsigned char *)str, len, &extents);
-      if ((too_long = extents.width + right_margin + CURSOR_PIXELS > w))
+      // Make sure to show some cursor movement for trailing space
+      // since Xft doesn't seem to.
+      if (cursor && len > 0 && str[len - 1] == ' ')
 	{
-	  str++;
-	  len--;
+	  XftTextExtents8(dpy, font, (unsigned char *)"  ", 2, &extents);
+	  right_margin += extents.width;
 	}
+      int too_long;
+      do
+	{
+	  XftTextExtents8(dpy, font, (unsigned char *)str, len, &extents);
+	  if ((too_long = extents.width + right_margin + CURSOR_PIXELS > w))
+	    {
+	      str++;
+	      len--;
+	    }
+	}
+      while (len > 0 && too_long);
+      if (len > 0)
+	XftDrawString8(draw,
+		       &color, font, x, y - bump, (unsigned char *)str, len);
+      if (cursor)
+	XftDrawRect(draw, &color, x + right_margin + extents.width, y - h + 1,
+		    CURSOR_PIXELS, h - 1);
     }
-  while (len > 0 && too_long);
-  if (len > 0)
-    XftDrawString8(draw, &color, font, x, y - bump, (unsigned char *)str, len);
-  if (cursor)
-    XftDrawRect(draw, &color, x + right_margin + extents.width, y - h + 1,
-		CURSOR_PIXELS, h - 1);
   XftColorFree(dpy, visual, colormap, &color);
+  XftColorFree(dpy, visual, colormap, &color2);
   XftDrawDestroy(draw);
 }
 
@@ -198,8 +228,8 @@ void do_stuff()
 #ifdef ON_ROOT
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
 #endif
-  char *msg = "Hello, world!\u0278";
-  //  test_tp(dpy, wid, msg, 300, 200);
+  char *msg = "Hello, world!";
+  char mask = 0;
 
   int again = 1;
   char out[128]="";
@@ -217,8 +247,8 @@ void do_stuff()
 	  switch(event.type)
 	    {
 	    case Expose:
-	      test_tp(dpy, wid, msg, 300, 200);
-	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1);
+	      //	      test_tp(dpy, wid, msg, 300, 200);
+	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
 	      break;
 	      
 	    case KeyPress:
@@ -251,13 +281,13 @@ void do_stuff()
 		default:
 		  if (isprint(ascii) &&
 		      (keysym < XK_Shift_L || keysym > XK_Hyper_R) &&
-		      outix < 64)
+		      outix < 128)
 		    {
 		      out[outix++] = ascii;
 		      out[outix] = 0;
 		    }
 		}
-	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1);
+	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
 	      break;
 	    }
 	}
