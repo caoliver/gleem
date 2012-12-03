@@ -394,8 +394,9 @@ void center_background(struct image *image, unsigned width, unsigned height,
     b = color & 0xff;
   unsigned char *new_rgb = xmalloc(3 * width * height);
 
-  int xoffset = ((int)width - image->width)/2;
-  int yoffset = ((int)height - image->height)/2;
+  // Round up so that call with empty image always succeeds with solid fill.
+  int xoffset = ((int)width - image->width + 1)/2;
+  int yoffset = ((int)height - image->height + 1)/2;
 
   unsigned char *dst = new_rgb;
 

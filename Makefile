@@ -6,7 +6,7 @@ GOBJS=greet.o
 OBJS=image.o numlock.o jpeg.o png.o util.o cfg.o keywords.o
 BINS=test testcfg
 
-.PHONY: clean
+.PHONY: clean tags
 
 test: ${OBJS} test.c
 	 gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
@@ -27,3 +27,8 @@ keywords.c: keywords.gperf
 clean:
 	rm -f ${BINS} ${OBJS} ${GOBJS} gmon.out libXdmGreet.so keywords.c
 	rm -f `find -name \*~ -o -name \#\*`
+	rm -rf GTAGS GRTAGS GPATH HTML
+
+tags:
+	gtags .
+	htags

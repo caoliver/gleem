@@ -74,7 +74,7 @@ void text_op(Display *dpy, Window win, int scr,
 #define CLEAR_TEXT_AT(DPY, WIN, SCR, STR, X, Y, PLACEMENT, PROPS)	\
   text_op(DPY, WIN, SCR, STR, X, Y, PLACEMENT, PROPS, 0)
 
-void test_tp(Display *dpy, Window win, char *str, int x, int y)
+void test_tp(Display *dpy, Window win, char *str, int x, int y, int clear)
 {
   int scr = DefaultScreen(dpy);
   Visual* visual = DefaultVisual(dpy, scr);
@@ -85,24 +85,7 @@ void test_tp(Display *dpy, Window win, char *str, int x, int y)
   XftColorAllocName(dpy, visual, colormap, "#f9f9f9", &tp.color);
   XftColorAllocName(dpy, visual, colormap, "#702342", &tp.shadow_color);
   tp.shadow_yoff = tp.shadow_xoff = 1;
-  for (int i = 0; i < 5; i++)
-    {
-      if (i > 0)
-	sleep(1);
-      if (~i & 1)
-	{
-	  PUT_TEXT_AT(dpy, win, scr, str, x, y, placement_left, &tp);
-	  PUT_TEXT_AT(dpy, win, scr, str, x, y - 36, placement_center, &tp);
-	  PUT_TEXT_AT(dpy, win, scr, str, x, y - 72, placement_right, &tp);
-	}
-      else
-	{
-	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y, placement_left, &tp);
-	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y - 36, placement_center, &tp);
-	  CLEAR_TEXT_AT(dpy, win, scr, str, x, y - 72, placement_right, &tp);
-	}
-      XSync(dpy, False);
-    }
+  text_op(dpy, win, scr, str, x, y, placement_right, &tp, !clear);
 }
 
 #define TSIZE "16"
@@ -114,15 +97,22 @@ void show_input_at(Display *dpy, int scr, Window wid, char *str,
 {
   Visual* visual = DefaultVisual(dpy, scr);
   Colormap colormap = DefaultColormap(dpy, scr);
-
   XftFont *font;
-  XftColor color, color2;
-  int star_width;
-  XClearArea(dpy, wid, x, y - h, w, h, False);
+  XftColor color, color2, scolor;
+
   XftColorAllocName(dpy, visual, colormap, "#702342", &color);
   XftColorAllocName(dpy, visual, colormap, "#a05372", &color2);
-  font = XftFontOpenName(dpy, scr, "URW Gothic:size=" TSIZE);
+  XftColorAllocName(dpy, visual, colormap, "black", &scolor);
   XftDraw *draw = XftDrawCreate(dpy, wid, visual, colormap);
+
+  int star_width;
+  int sxoff=0, syoff=0;
+
+  XClearArea(dpy, wid, x, y - h, w, h + (syoff < 0 ? -syoff : syoff), False);
+  w -= sxoff < 0 ? -sxoff : sxoff;
+  y += syoff < 0 ? -syoff : 0;
+  x += sxoff < 0 ? -sxoff : 0;
+  font = XftFontOpenName(dpy, scr, "URW Gothic:size=" TSIZE);
   XGlyphInfo extents;
   int len = strlen(str);
   XftTextExtents8(dpy, font, (unsigned char *)"|", 1, &extents);
@@ -141,8 +131,14 @@ void show_input_at(Display *dpy, int scr, Window wid, char *str,
 	extras = 0;
       if (extents.width > 0)
 	for (int i = extras; i < len; i++, x += star_width)
-	  XftDrawString8(draw, (i % 8 < 4) ? &color : &color2,
-			 font, x, y - bump, &secret_mask, 1);
+	  {
+	    if (sxoff != 0 || syoff != 0)
+	      XftDrawString8(draw, &scolor, font,
+			     x + sxoff, y + syoff - bump, &secret_mask, 1);
+	      
+	    XftDrawString8(draw, (i % 8 < 4) ? &color : &color2,
+			   font, x, y - bump, &secret_mask, 1);
+	  }
       else
 	x += star_width * (len - extras);
 
@@ -171,8 +167,13 @@ void show_input_at(Display *dpy, int scr, Window wid, char *str,
 	}
       while (len > 0 && too_long);
       if (len > 0)
-	XftDrawString8(draw,
-		       &color, font, x, y - bump, (unsigned char *)str, len);
+	{
+	  if (sxoff != 0 || syoff != 0)
+	    XftDrawString8(draw, &scolor, font, x + sxoff, y + syoff - bump,
+			   (unsigned char *)str, len);
+	  XftDrawString8(draw,
+			 &color, font, x, y - bump, (unsigned char *)str, len);
+	}
       if (cursor)
 	XftDrawRect(draw, &color, x + right_margin + extents.width, y - h + 1,
 		    CURSOR_PIXELS, h - 1);
@@ -202,6 +203,7 @@ void do_stuff()
   wid = XCreateSimpleWindow(dpy, rootid, 0, 0, 1024, 768, 0, 0, 0);
 #endif
   pwid = XCreateSimpleWindow(dpy, wid, XOFF, YOFF, 587, 235, 0, 0, 255);
+  memset(&bg, 0, sizeof(bg));
   read_image("background.jpg", &bg);
   resize_background(&bg, 1024, 768);
   pixmap = imageToPixmap(dpy, &bg, scr, wid);
@@ -228,8 +230,9 @@ void do_stuff()
 #ifdef ON_ROOT
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
 #endif
-  char *msg = "Hello, world!";
-  char mask = 0;
+  //  char *msg = "Hello, world!";
+  char *msg = "I'm going to put a very long string on the screen.  Tra la la la la!!!!!";
+  char mask = '*';
 
   int again = 1;
   char out[128]="";
@@ -243,11 +246,16 @@ void do_stuff()
 	  XComposeStatus compstatus;
 	  char ascii;
 
+#define XROOT 0
+#define YROOT 600
+
 	  XNextEvent(dpy, &event);
 	  switch(event.type)
 	    {
 	    case Expose:
-	      //	      test_tp(dpy, wid, msg, 300, 200);
+	      test_tp(dpy, wid, msg, XROOT, YROOT, 0);
+	      test_tp(dpy, pwid, msg, XROOT-XOFF, YROOT-YOFF, 0);
+
 	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
 	      break;
 	      
@@ -263,6 +271,10 @@ void do_stuff()
 		case XK_Return:
 		case XK_Tab:
 		case XK_KP_Enter:
+		  test_tp(dpy, wid, msg, XROOT, YROOT, 1);
+		  test_tp(dpy, pwid, msg, XROOT-XOFF, YROOT-YOFF, 1);
+		  XSync(dpy, False);
+		  sleep(2);
 		  write(1, "Result: ", 9);
 		  if (outix)
 		    write(1, out, outix);
