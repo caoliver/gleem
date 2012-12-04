@@ -1,9 +1,7 @@
 #ifndef _CFG_H_
 #define _CFG_H_
 
-#define ALLOC_TAG _allocated
-
-#define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##ALLOC_TAG
+#define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
 
 struct command {
   int action;  // Keyword whitespace [optional params]

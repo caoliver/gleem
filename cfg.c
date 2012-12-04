@@ -27,7 +27,9 @@
 #define ALLOC_STATIC 0
 #define ALLOC_DYNAMIC 1
 
-#define RESOURCE_HEAD "gleem."
+#define MAIN_PREFIX "gleem."
+#define COMMAND_PREFIX MAIN_PREFIX "command."
+#define THEME_PREFIX ""
 
 struct resource_spec {
   char *name;
@@ -38,20 +40,6 @@ struct resource_spec {
   size_t offset;
   size_t allocated;
 };
-
-#define OFFSET(STRUCT, FIELD) ((char *)&(STRUCT).FIELD - (char *)&(STRUCT))
-
-#define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
-  {   RESOURCE_PREFIX #NAME,				\
-      ALLOC, NULL,					\
-      DEFAULT, offsetof(struct DECL_STRUCT, FIELD), 0 }
-
-#define DECLDYNAMIC(NAME, ALLOC, FREE, DEFAULT, FIELD)	\
-  {   RESOURCE_PREFIX #NAME,				\
-      ALLOC, FREE,					\
-      DEFAULT,						\
-      offsetof(struct DECL_STRUCT, FIELD),		\
-      offsetof(struct DECL_STRUCT, FIELD##ALLOC_TAG) }
 
 
 static INLINE_DECL const char *skip_space(const char *str)
@@ -344,7 +332,18 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
     }
 }
 
-#define RESOURCE_PREFIX RESOURCE_HEAD
+#define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
+  {   #NAME,						\
+      ALLOC, NULL,					\
+      DEFAULT, offsetof(struct DECL_STRUCT, FIELD), 0 }
+
+#define DECLDYNAMIC(NAME, ALLOC, FREE, DEFAULT, FIELD)	\
+  {   #NAME,						\
+      ALLOC, FREE,					\
+      DEFAULT,						\
+      offsetof(struct DECL_STRUCT, FIELD),		\
+      offsetof(struct DECL_STRUCT, FIELD##_ALLOC) }
+
 #define DECL_STRUCT cfg
 
 struct resource_spec cfg_resources[] = {
@@ -365,9 +364,6 @@ struct resource_spec cfg_resources[] = {
 };
 
 #define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
-
-#undef RESOURCE_PREFIX
-#define RESOURCE_PREFIX ""
 
 #define DECLCOLOR(NAME, DEFAULT, PLACE)					\
   DECLDYNAMIC(NAME, get_cfg_color, free_cfg_color, DEFAULT_##DEFAULT, PLACE)
@@ -409,6 +405,7 @@ struct resource_spec theme_resources[] = {
 
 #undef DECL_STRUCT
 #define DECL_STRUCT command
+
 struct resource_spec cmd_resources[] = {
   { "shortcut", get_cmd_shortcut, NULL, &Null, 0, 0 },
   DECLSTATIC(delay, get_cfg_count, &Zero, delay),
@@ -421,12 +418,11 @@ struct resource_spec cmd_resources[] = {
 
 static struct cfg cfg;
 
-#define CMD_PREFIX RESOURCE_HEAD "command."
-
 struct cfg *get_cfg(Display *dpy)
 {
   XrmDatabase db;
   char *theme_directory, *themes;
+  static char name[48];
 
 #ifdef TESTING
   if (!(db = XrmGetFileDatabase("gleem.conf")))
@@ -434,15 +430,19 @@ struct cfg *get_cfg(Display *dpy)
 #endif
 
   memset(&cfg, 0, sizeof(cfg));
+  strcpy(name, MAIN_PREFIX);
   struct resource_spec *spec = cfg_resources;
   for (int i = 0; i < NUM_CFG ; i++, spec++)
-    if ((spec->allocate)(dpy, db, spec->name, (char *)&cfg + spec->offset,
-			 spec->default_value))
-      *(int *)((char *)&cfg + spec->allocated) = 1;
+    {
+      strcpy(&name[sizeof(MAIN_PREFIX)-1], spec->name);
+      if ((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
+			   spec->default_value))
+	*(int *)((char *)&cfg + spec->allocated) = 1;
+    }
   cfg.current_session = cfg.sessions;
-  get_cfg_string(dpy, db, "gleem.theme-directory",
+  get_cfg_string(dpy, db, MAIN_PREFIX "theme-directory",
 		 &theme_directory, xstrdup("."));
-  get_cfg_string(dpy, db, "gleem.current-theme", &themes, &Null);
+  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes, &Null);
 
   if (cfg.command_count < 16)
     cfg.command_count = 16;
@@ -450,19 +450,20 @@ struct cfg *get_cfg(Display *dpy)
     cfg.command_count = 100;
   cfg.commands = xcalloc(sizeof(struct command), cfg.command_count);
 
+  strcpy(name, COMMAND_PREFIX);
   for (int cmd_id = 0; cmd_id < cfg.command_count; cmd_id++)
     {
-      static char name[48] = CMD_PREFIX;
       struct command *cmd = &cfg.commands[cmd_id];
-      sprintf(&name[sizeof(CMD_PREFIX)-1], "%d.action", cmd_id + 1);
+      char *rest_of_name = &name[sizeof(COMMAND_PREFIX)-1];
+      rest_of_name += sprintf(rest_of_name, "%d.", cmd_id + 1);
+      strcpy(rest_of_name, "action");
       get_cmd_action(db, name, cmd);
       if (!cmd->action)
 	continue;
       spec = cmd_resources;
       for (int i = 0; i < NUM_CMD ; i++, spec++)
 	{
-	  sprintf(&name[sizeof(CMD_PREFIX)-1], "%d.%s", cmd_id + 1,
-		  spec->name);
+	  strcpy(rest_of_name, spec->name);
 	  if ((spec->allocate)(dpy, db, name, (char *)cmd + spec->offset,
 			       spec->default_value))
 	    *(int *)((char *)cmd + spec->allocated) = 1;
@@ -476,11 +477,15 @@ struct cfg *get_cfg(Display *dpy)
     abort();
 #endif
 
+  strcpy(name, THEME_PREFIX);
   spec = theme_resources;
   for (int i = 0; i < NUM_THEME ; i++, spec++)
-    if((spec->allocate)(dpy, db, spec->name, (char *)&cfg + spec->offset,
-			spec->default_value))
-      *(int *)((char *)&cfg + spec->allocated) = 1;      
+    {
+      strcpy(&name[sizeof(THEME_PREFIX)-1], spec->name);
+      if((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
+			  spec->default_value))
+	*(int *)((char *)&cfg + spec->allocated) = 1;      
+    }
 
 #if defined(TESTING) && defined(BREAK)
   __asm__("int3");
