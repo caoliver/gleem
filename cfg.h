@@ -1,7 +1,11 @@
 #ifndef _CFG_H_
 #define _CFG_H_
 
-#define DEFAULT_BKGND_STYLE KEYWORD_COLOR
+#define DEFAULT_WELCOME_MESSAGE "Welcome to %host"
+#define DEFAULT_MESSAGE_DURATION 3
+#define DEFAULT_COMMAND_COUNT 16
+
+#define DEFAULT_BKGND_STYLE "color"
 #define DEFAULT_BKGND_COLOR "black"
 #define DEFAULT_MESSAGE_COLOR "white"
 #define DEFAULT_MESSAGE_SHADOW_COLOR "gray"
@@ -21,39 +25,59 @@
 #define DEFAULT_USER_FONT "Verdana:size=14:dpi=75"
 #define DEFAULT_PASS_FONT "Verdana:size=14:dpi=75"
 
+#define DEFAULT_USER_PROMPT "Username: "
+#define DEFAULT_PASS_PROMPT "Password: "
+
+#define DEFAULT_PASS_MASK "*"
+
+#define WITH_FREE_FLAG(TYPE, NAME) TYPE NAME; int NAME##_allocated
+
 struct command {
-  char *name;
+  WITH_FREE_FLAG(char *, name);
   int action;  // Keyword whitespace [optional params]
-  char *action_params;
+  char* action_params;
   int delay;
-  char *message;
+  WITH_FREE_FLAG(char *, message);
   KeySym keysym;
   unsigned mod_state;
-  char *allowed_users;
+  WITH_FREE_FLAG(char *, allowed_users);
 };
 
 struct cfg {
   int numlock, ignore_capslock, hide_mouse;
   int auto_login, focus_password;
-  char *default_user;
-  char *welcome_message;
-  char *sessions, *current_session;  // whitespace list and ptr to current
+  int message_duration;
+  WITH_FREE_FLAG(char *, default_user);
+  WITH_FREE_FLAG(char *, welcome_message);
+  WITH_FREE_FLAG(char *, sessions);
+  char *current_session;  // whitespace list and ptr to current
   int command_count;
   struct command *commands;
 
-  XftColor background_color;
-  XftColor message_color, message_shadow_color;
-  XftColor welcome_color, welcome_shadow_color;
-  XftColor user_color, user_shadow_color;
-  XftColor pass_color, pass_shadow_color;
-  XftColor input_color, input_alternate_color, input_shadow_color;
+  WITH_FREE_FLAG(XftColor, background_color);
+  WITH_FREE_FLAG(XftColor, message_color);
+  WITH_FREE_FLAG(XftColor, message_shadow_color);
+  WITH_FREE_FLAG(XftColor, welcome_color);
+  WITH_FREE_FLAG(XftColor, welcome_shadow_color);
+  WITH_FREE_FLAG(XftColor, user_color);
+  WITH_FREE_FLAG(XftColor, user_shadow_color);
+  WITH_FREE_FLAG(XftColor, pass_color);
+  WITH_FREE_FLAG(XftColor, pass_shadow_color);
+  WITH_FREE_FLAG(XftColor, input_color);
+  WITH_FREE_FLAG(XftColor, input_alternate_color);
+  WITH_FREE_FLAG(XftColor, input_shadow_color);
 
-  XftFont *message_font, *welcome_font, *input_font, *pass_font, *user_font;
+  WITH_FREE_FLAG(XftFont *, message_font);
+  WITH_FREE_FLAG(XftFont *, welcome_font);
+  WITH_FREE_FLAG(XftFont *, input_font);
+  WITH_FREE_FLAG(XftFont *, pass_font);
+  WITH_FREE_FLAG(XftFont *, user_font);
 
   int background_style;
 
-  char *username_prompt, *password_prompt;
-  char password_display;
+  WITH_FREE_FLAG(char *, username_prompt);
+  WITH_FREE_FLAG(char *, password_prompt);
+  char password_mask;
 };
 
 

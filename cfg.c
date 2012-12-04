@@ -3,11 +3,11 @@
 #include <X11/Xft/Xft.h>
 #include <X11/Xresource.h>
 #include <X11/XKBlib.h>
+#include <stddef.h>
 #include <ctype.h>
-// #include "dm.h"
 #include "util.h"
-#include "cfg.h"
 #include "keywords.h"
+#include "cfg.h"
 
 #if __STDC_VERSION__ >= 199901L
 #define INLINE_DECL inline
@@ -17,64 +17,41 @@
 #define INLINE_DECL
 #endif
 
-#define UNMANAGE_DISPLAY 0
 #define LogError printf
+#define UNMANAGE_DISPLAY 0
+#define RESERVER_DISPLAY 1
 
 #define DUMMY_RESOURCE_CLASS "_dummy_"
 
-static void get_cfg_boolean(XrmDatabase db, const char *name,
-			    int *valptr, int default_value)
-{
-  char *type;
-  XrmValue value;
+#define ALLOC_STATIC 0
+#define ALLOC_DYNAMIC 1
 
-  *valptr =
-    XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
-    ? (!strcmp(value.addr, "true") ||
-       !strcmp(value.addr, "on") ||
-       !strcmp(value.addr, "yes"))
-    : default_value;
-}
+#define RESOURCE_HEAD "gleem."
 
-static void get_cfg_count(XrmDatabase db, const char *name,
-			  int *valptr, int default_value)
-{
-  char *type, *end;
-  XrmValue value;
+struct resource_spec {
+  char *name;
+  int (*allocate)(Display *dpy, XrmDatabase db,
+		  const char *name, void *where, void *deflt);
+  void (*free)(Display *dpy, void **where);
+  void *default_value;
+  size_t offset;
+  size_t allocated;
+};
 
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    {
-      *valptr = default_value;
-      return;
-    }
+#define OFFSET(STRUCT, FIELD) ((char *)&(STRUCT).FIELD - (char *)&(STRUCT))
 
-  *valptr = strtol(value.addr, &end, 10);
-  if (end != value.addr &&
-      (end - value.addr) == strlen(value.addr) &&
-      *valptr >= 0)
-    return;
+#define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
+  {   RESOURCE_PREFIX #NAME,				\
+      ALLOC, NULL,					\
+      DEFAULT, offsetof(struct DECL_STRUCT, FIELD), 0 }
 
-  LogError("Invalid count resource %s for %s\n", value.addr, name);
-  exit(UNMANAGE_DISPLAY);
-}
+#define DECLDYNAMIC(NAME, ALLOC, FREE, DEFAULT, FIELD)	\
+  {   RESOURCE_PREFIX #NAME,				\
+      ALLOC, FREE,					\
+      DEFAULT,						\
+      offsetof(struct DECL_STRUCT, FIELD),		\
+      offsetof(struct DECL_STRUCT, FIELD##_allocated) }
 
-static void get_cfg_string(XrmDatabase db, const char *name,
-			   char **valptr, char *default_value)
-{
-  char *type;
-  XrmValue value;
-
-  *valptr =
-    XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
-    ? xstrdup(value.addr)
-    : default_value;
-}
-
-#define RESOURCE_PREFIX "gleem.command."
-
-#define GETCMD(TYPE, NAME, PLACE, DEFAULT)				\
-  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d."#NAME, cmd_id);	\
-  get_cfg_##TYPE(db, name, PLACE, DEFAULT)
 
 static INLINE_DECL const char *skip_space(const char *str)
 {
@@ -90,37 +67,135 @@ static INLINE_DECL const char *scan_to_space(const char *str)
   return str;
 }
 
-static void
-parse_action(struct command *cmd, const char *action, const char *name)
+static int get_cfg_boolean(Display *dpy, XrmDatabase db, const char *name,
+			   void *valptr, void *default_value)
 {
-  const char *str = action;
-  const char *end = scan_to_space(str);
-  switch (cmd->action = lookup_keyword(str, end - str))
-    {
-    case KEYWORD_EXEC:
-      if (*(str = skip_space(end)))
-	{
-	  cmd->action_params = xstrdup(str);
-	  break;
-	}
-      LogError("Missing command to exec in %s\n", name);
-      exit(UNMANAGE_DISPLAY);
+  char *type;
+  XrmValue value;
 
-    case KEYWORD_SWITCH_SESSION:
-      cmd->action_params = *(str = skip_space(end)) ? xstrdup(str) : NULL;
-      break;
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    switch (lookup_keyword(value.addr, value.size - 1))
+      {
+      case KEYWORD_TRUE:
+	*(int *)valptr = 1;
+	break;
+      case KEYWORD_FALSE:
+	*(int *)valptr = 0;
+	break;
+      default:
+	LogError("Invalid boolean resource %s for %s\n", value.addr, name);
+	exit(UNMANAGE_DISPLAY);
+      }
+  else
+    *(int *)valptr = *(int *)default_value;
 
-    default:
-      LogError("Invalid action: %s: %s\n", name, str);
-      exit(UNMANAGE_DISPLAY);
-    }
+  return ALLOC_STATIC;
 }
 
-static void
-parse_shortcut(Display *dpy, struct command *cmd, const char *shortcut,
-	       const char *name)
+static int get_cfg_count(Display *dpy, XrmDatabase db, const char *name,
+			 void *valptr, void *default_value)
 {
-  const char *str = shortcut, *end;
+  char *type, *end;
+  XrmValue value;
+
+  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    {
+      *(int *)valptr = *(int *)default_value;
+      return ALLOC_STATIC;
+    }
+
+  *(int *)valptr = strtol(value.addr, &end, 10);
+  if (end != value.addr &&
+      (end - value.addr) == strlen(value.addr) &&
+      *(int *)valptr >= 0)
+    return ALLOC_STATIC;
+
+  LogError("Invalid count resource %s for %s\n", value.addr, name);
+  exit(UNMANAGE_DISPLAY);
+}
+
+static int get_cfg_string(Display *dpy, XrmDatabase db, const char *name,
+			  void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+
+  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    {
+      *(char **)valptr = *(char **)default_value;
+      return ALLOC_STATIC;
+    }
+
+  *(char **)valptr = xstrdup(value.addr);
+  return ALLOC_DYNAMIC;
+}
+
+static int get_cfg_char(Display *dpy, XrmDatabase db, const char *name,
+			  void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+
+  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    {
+      *(char *)valptr = **(char **)default_value;
+      return ALLOC_STATIC;
+    }
+
+  *(char *)valptr = value.addr[1];
+  return ALLOC_STATIC;
+}
+
+
+static void free_cfg_string(Display *dpy, void **ptr)
+{
+  free(*ptr);
+  *ptr = NULL;
+}
+
+int Zero = 0;
+#define untrue Zero
+char *Null = NULL;
+int default_message_duration = DEFAULT_MESSAGE_DURATION;
+int default_command_count = DEFAULT_COMMAND_COUNT;
+
+static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
+			       void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+  char *style_name = (char *)default_value;
+
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    style_name = value.addr;
+
+  switch ((*(int *)valptr = lookup_keyword(style_name, strlen(style_name))))
+    {
+    case KEYWORD_TILE:
+    case KEYWORD_CENTER:
+    case KEYWORD_STRETCH:
+    case KEYWORD_COLOR:
+      break;
+    default:
+      LogError("Invalid background style %s\n", style_name);
+      exit(UNMANAGE_DISPLAY);
+    }
+
+  return ALLOC_STATIC;
+}
+
+static int
+get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
+		 void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+  struct command *cmd = valptr;
+
+  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    return ALLOC_STATIC;
+
+  const char *str = value.addr, *end;
   while (*str)
     {
       if (!*(end = scan_to_space(str)))
@@ -171,7 +246,7 @@ parse_shortcut(Display *dpy, struct command *cmd, const char *shortcut,
 	   || (cmd->mod_state & ~ShiftMask)))
 	{
 	  cmd->keysym = keysym;
-	  return;
+	  return ALLOC_STATIC;
 	}
     }
 
@@ -179,208 +254,281 @@ parse_shortcut(Display *dpy, struct command *cmd, const char *shortcut,
   exit(UNMANAGE_DISPLAY);
 }
 
-static void
-get_command(Display *dpy, XrmDatabase db, struct command *cmd, int cmd_id)
+static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
+	      void *valptr, void *default_value)
 {
-  static char name[48] = RESOURCE_PREFIX;
   char *type;
   XrmValue value;
+  char *font_name = (char *)default_value;
+  int scr = DefaultScreen(dpy);
 
-  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d.action", cmd_id);
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    return;
-  parse_action(cmd, value.addr, name);
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    font_name = value.addr;
 
-  GETCMD(count, delay, &cmd->delay, 0);
-  GETCMD(string, name, &cmd->name, NULL);
-  GETCMD(string, message, &cmd->message, NULL);
-  GETCMD(string, users, &cmd->allowed_users, NULL);
+  if ((*(XftFont **)valptr = XftFontOpenName(dpy, scr, font_name)))
+    return ALLOC_DYNAMIC;
 
-  sprintf(&name[sizeof(RESOURCE_PREFIX)-1], "%d.shortcut", cmd_id);
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    return;
-  parse_shortcut(dpy, cmd, value.addr, name);
+  LogError("Can't open font %s\n", font_name);
+  exit(UNMANAGE_DISPLAY);
 }
 
-void free_command(struct command *cmd)
+static void free_cfg_font(Display *dpy, void **where)
 {
-  free(cmd->action_params);
-  free(cmd->allowed_users);
-  free(cmd->name);
-  free(cmd->message);
+  XftFontClose(dpy, *(XftFont **)where);
+  *(XftFont **)where = NULL;
 }
 
-#define GETCFG(DB, TYPE, NAME, PLACE, DEFAULT)		\
-  get_cfg_##TYPE(DB, "gleem."#NAME, PLACE, DEFAULT)
-
-#define MAX_CMDS 256
-
-struct cfg *read_cfg(Display *dpy)
+static int get_cfg_color(Display *dpy, XrmDatabase db, const char *name,
+	      void *valptr, void *default_value)
 {
-  struct cfg *cfg = xcalloc(sizeof(*cfg), 1);
+  char *type;
+  XrmValue value;
+  char *color_name = (char *)default_value;
+  int scr = DefaultScreen(dpy);
+  Colormap colormap = DefaultColormap(dpy, scr);
+  Visual *visual = DefaultVisual(dpy, scr);
+
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    color_name = value.addr;
+
+  if (XftColorAllocName(dpy, visual, colormap, color_name,
+			(XftColor *)valptr))
+    return ALLOC_DYNAMIC;
+
+  LogError("Ran out of colors\n");
+  exit(RESERVER_DISPLAY);
+}
+
+static void free_cfg_color(Display *dpy, void **where)
+{
+  int scr = DefaultScreen(dpy);
+  Colormap colormap = DefaultColormap(dpy, scr);
+  Visual *visual = DefaultVisual(dpy, scr);
+
+  XftColorFree(dpy, visual, colormap, (XftColor *)where);
+}
+
+static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
+{
+  char *type;
+  XrmValue value;
+  struct command *cmd = valptr;
+
+  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    {
+      cmd->action = 0;
+      return;
+    }
+
+  const char *str = value.addr;
+  const char *end = scan_to_space(str);
+  switch (cmd->action = lookup_keyword(str, end - str))
+    {
+    case KEYWORD_EXEC:
+      if (*(str = skip_space(end)))
+	{
+	  cmd->action_params = xstrdup(str);
+	  break;
+	}
+      LogError("Missing command to exec in %s\n", name);
+      exit(UNMANAGE_DISPLAY);
+
+    case KEYWORD_SWITCH_SESSION:
+      cmd->action_params = *(str = skip_space(end)) ? xstrdup(str) : NULL;
+      break;
+
+    default:
+      LogError("Invalid action: %s: %s\n", name, str);
+      exit(UNMANAGE_DISPLAY);
+    }
+}
+
+#define RESOURCE_PREFIX RESOURCE_HEAD
+#define DECL_STRUCT cfg
+
+struct resource_spec cfg_resources[] = {
+  DECLSTATIC(ignore-capslock, get_cfg_boolean, &untrue, ignore_capslock),
+  DECLSTATIC(numlock, get_cfg_boolean, &untrue, numlock),
+  DECLSTATIC(hide-mouse, get_cfg_boolean, &untrue, hide_mouse),
+  DECLSTATIC(auto-login, get_cfg_boolean, &untrue, auto_login),
+  DECLSTATIC(focus-password, get_cfg_boolean, &untrue, auto_login),
+  DECLDYNAMIC(default-user, get_cfg_string, free_cfg_string,
+	      &Null, default_user),
+  DECLDYNAMIC(welcome-message, get_cfg_string, free_cfg_string,
+	      DEFAULT_WELCOME_MESSAGE, welcome_message),
+  DECLDYNAMIC(sessions, get_cfg_string, free_cfg_string, NULL, sessions),
+  DECLSTATIC(message-duration, get_cfg_count, &default_message_duration,
+	     message_duration),
+  DECLSTATIC(command.scan-to, get_cfg_count, &default_command_count,
+	     command_count),
+};
+
+#define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
+
+#undef RESOURCE_PREFIX
+#define RESOURCE_PREFIX ""
+
+#define DECLCOLOR(NAME, DEFAULT, PLACE)					\
+  DECLDYNAMIC(NAME, get_cfg_color, free_cfg_color, DEFAULT_##DEFAULT, PLACE)
+
+#define DECLFONT(NAME, DEFAULT, PLACE)					\
+  DECLDYNAMIC(NAME, get_cfg_font, free_cfg_font, DEFAULT_##DEFAULT, PLACE)
+
+
+struct resource_spec theme_resources[] = {
+  DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
+	     background_style),
+  DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
+	     password_mask),
+  DECLDYNAMIC(password.prompt.string, get_cfg_string, free_cfg_string,
+	      DEFAULT_PASS_PROMPT, password_prompt),
+  DECLDYNAMIC(username.prompt.string, get_cfg_string, free_cfg_string,
+	      DEFAULT_USER_PROMPT, username_prompt),
+  DECLCOLOR(background.color, BKGND_COLOR, background_color),
+  DECLCOLOR(message.color, MESSAGE_COLOR, message_color),
+  DECLCOLOR(message.shadow.color, MESSAGE_SHADOW_COLOR, message_shadow_color),
+  DECLCOLOR(welcome.color, WELCOME_COLOR, welcome_color),
+  DECLCOLOR(welcome.shadow.color, WELCOME_SHADOW_COLOR, welcome_shadow_color),
+  DECLCOLOR(pass.prompt.color, PASS_COLOR, pass_color),
+  DECLCOLOR(pass.prompt.shadow.color, PASS_SHADOW_COLOR, pass_shadow_color),
+  DECLCOLOR(user.prompt.color, USER_COLOR, user_color),
+  DECLCOLOR(user.prompt.shadow.color, USER_SHADOW_COLOR, user_shadow_color),
+  DECLCOLOR(input.color, INPUT_COLOR, input_color),
+  DECLCOLOR(input.shadow.color, INPUT_SHADOW_COLOR, input_shadow_color),
+  DECLCOLOR(input.alternate.color, INPUT_ALTERNATE_COLOR,
+	    input_alternate_color),
+  DECLFONT(message.font, MESSAGE_FONT, message_font),
+  DECLFONT(welcome.font, WELCOME_FONT, welcome_font),
+  DECLFONT(input.font, INPUT_FONT, input_font),
+  DECLFONT(password.prompt.font, PASS_FONT, pass_font),
+  DECLFONT(username.prompt.font, USER_FONT, user_font),
+};
+
+#define NUM_THEME (sizeof(theme_resources) / sizeof(struct resource_spec))
+
+#undef DECL_STRUCT
+#define DECL_STRUCT command
+struct resource_spec cmd_resources[] = {
+  { "shortcut", get_cmd_shortcut, NULL, &Null, 0, 0 },
+  DECLSTATIC(delay, get_cfg_count, &Zero, delay),
+  DECLDYNAMIC(name, get_cfg_string, free_cfg_string, &Null, name),
+  DECLDYNAMIC(message, get_cfg_string, free_cfg_string, &Null, message),
+  DECLDYNAMIC(users, get_cfg_string, free_cfg_string, &Null, allowed_users),
+};
+
+#define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
+
+static struct cfg cfg;
+
+#define CMD_PREFIX RESOURCE_HEAD "command."
+
+struct cfg *get_cfg(Display *dpy)
+{
   XrmDatabase db;
   char *theme_directory, *themes;
-  char *type;
-  XrmValue value;
-  int scr = DefaultScreen(dpy);
-  Colormap colormap = DefaultColormap(dpy, scr);
-  Visual *visual = DefaultVisual(dpy, scr);
 
-  /* db = XrmGetStringDatabase(XResourceManagerString(dpy)); */
+#ifdef TESTING
   if (!(db = XrmGetFileDatabase("gleem.conf")))
     abort();
+#endif
 
-  GETCFG(db, boolean, numlock, &cfg->numlock, 0);
-  GETCFG(db, boolean, ignore-capslock, &cfg->ignore_capslock, 1);
-  GETCFG(db, boolean, hide-mouse, &cfg->hide_mouse, 0);
-  GETCFG(db, boolean, auto-login, &cfg->auto_login, 0);
-  GETCFG(db, boolean, focus-password, &cfg->focus_password, 0);
-  GETCFG(db, string, default-user, &cfg->default_user, NULL);
-  GETCFG(db, string, welcome-message, &cfg->welcome_message, NULL);
-  GETCFG(db, string, theme-directory, &theme_directory, xstrdup("."));
-  GETCFG(db, string, current-theme, &themes, NULL);
-  GETCFG(db, string, sessions, &cfg->sessions, NULL);
-  cfg->current_session = cfg->sessions;
-  GETCFG(db, count, command.scan-to, &cfg->command_count, 16);
-  cfg->commands = xcalloc(sizeof(struct command), cfg->command_count);
-  if (cfg->command_count > MAX_CMDS)
-    cfg->command_count = MAX_CMDS;
-  
-  for (int i = 0; i < cfg->command_count; i++)
-    get_command(dpy, db, &(cfg->commands)[i], i + 1);
+  memset(&cfg, 0, sizeof(cfg));
+  struct resource_spec *spec = cfg_resources;
+  for (int i = 0; i < NUM_CFG ; i++, spec++)
+    if ((spec->allocate)(dpy, db, spec->name, (char *)&cfg + spec->offset,
+			 spec->default_value))
+      *(int *)((char *)&cfg + spec->allocated) = 1;
+  cfg.current_session = cfg.sessions;
+  get_cfg_string(dpy, db, "gleem.theme-directory",
+		 &theme_directory, xstrdup("."));
+  get_cfg_string(dpy, db, "gleem.current-theme", &themes, &Null);
 
-  // Process theme
+  if (cfg.command_count < 16)
+    cfg.command_count = 16;
+  else if (cfg.command_count > 100)
+    cfg.command_count = 100;
+  cfg.commands = xcalloc(sizeof(struct command), cfg.command_count);
+
+  for (int cmd_id = 0; cmd_id < cfg.command_count; cmd_id++)
+    {
+      static char name[48] = CMD_PREFIX;
+      struct command *cmd = &cfg.commands[cmd_id];
+      sprintf(&name[sizeof(CMD_PREFIX)-1], "%d.action", cmd_id + 1);
+      get_cmd_action(db, name, cmd);
+      if (!cmd->action)
+	continue;
+      spec = cmd_resources;
+      for (int i = 0; i < NUM_CMD ; i++, spec++)
+	{
+	  sprintf(&name[sizeof(CMD_PREFIX)-1], "%d.%s", cmd_id + 1,
+		  spec->name);
+	  if ((spec->allocate)(dpy, db, name, (char *)cmd + spec->offset,
+			       spec->default_value))
+	    *(int *)((char *)cmd + spec->allocated) = 1;
+	}
+    }
+
   XrmDestroyDatabase(db);
+
+#ifdef TESTING
   if (!(db = XrmGetFileDatabase("theme.conf")))
     abort();
+#endif
 
-#define GETCFGCOLOR(NAME, PLACE, DEFAULT)				\
-  XftColorAllocName(dpy, visual, colormap,				\
-		    XrmGetResource(db, #NAME, DUMMY_RESOURCE_CLASS,	\
-				   &type, &value)			\
-		    ? value.addr					\
-		    : DEFAULT_##DEFAULT, &cfg->PLACE)
-  
-  // Get color resources.
-  if (!GETCFGCOLOR(background.color, background_color, BKGND_COLOR) ||
-      !GETCFGCOLOR(message.color, message_color, MESSAGE_COLOR) ||
-      !GETCFGCOLOR(message.shadow.color, message_shadow_color,
-		   MESSAGE_SHADOW_COLOR) ||
-      !GETCFGCOLOR(welcome.color, welcome_color, WELCOME_COLOR) ||
-      !GETCFGCOLOR(welcome.shadow.color, welcome_shadow_color,
-		   WELCOME_SHADOW_COLOR) ||
-      !GETCFGCOLOR(username.prompt.color, user_color, USER_COLOR) ||
-      !GETCFGCOLOR(username.prompt.shadow.color, user_shadow_color,
-		   USER_SHADOW_COLOR) ||
-      !GETCFGCOLOR(password.prompt.color, pass_color, PASS_COLOR) ||
-      !GETCFGCOLOR(password.prompt.shadow.color, pass_shadow_color,
-		   PASS_SHADOW_COLOR) ||
-      !GETCFGCOLOR(input.color, input_color, INPUT_COLOR) ||
-      !GETCFGCOLOR(input.alternate.color, input_alternate_color,
-		   INPUT_ALTERNATE_COLOR) ||
-      !GETCFGCOLOR(input.shadow.color, input_shadow_color,
-		   INPUT_SHADOW_COLOR))
-    {
-      LogError("Ran out of colors\n");
-      exit(UNMANAGE_DISPLAY);
-    }
+  spec = theme_resources;
+  for (int i = 0; i < NUM_THEME ; i++, spec++)
+    if((spec->allocate)(dpy, db, spec->name, (char *)&cfg + spec->offset,
+			spec->default_value))
+      *(int *)((char *)&cfg + spec->allocated) = 1;      
 
-#define GETCFGFONT(NAME, PLACE, DEFAULT)				\
-  (cfg->PLACE = XftFontOpenName(dpy, scr,				\
-				fontname =				\
-				XrmGetResource(db, #NAME,		\
-					       DUMMY_RESOURCE_CLASS,	\
-					       &type, &value)		\
-				? value.addr				\
-				: DEFAULT))
-
-  char *fontname = NULL;
-  if (!GETCFGFONT(message.font, message_font, DEFAULT_MESSAGE_FONT) ||
-      !GETCFGFONT(welcome.font, welcome_font, DEFAULT_WELCOME_FONT) ||
-      !GETCFGFONT(input.font, input_font, DEFAULT_INPUT_FONT) ||
-      !GETCFGFONT(user.font, user_font, DEFAULT_USER_FONT) ||
-      !GETCFGFONT(pass.font, pass_font, DEFAULT_PASS_FONT))
-    {
-      LogError("Can't open font: %s\n", fontname);
-      exit(UNMANAGE_DISPLAY);
-    }
-
-  if (!XrmGetResource(db, "background.style", DUMMY_RESOURCE_CLASS,
-		      &type, &value))
-    cfg->background_style = DEFAULT_BKGND_STYLE;
-  else
-    switch (cfg->background_style = lookup_keyword(value.addr, value.size - 1))
-      {
-      case KEYWORD_TILE:
-      case KEYWORD_CENTER:
-      case KEYWORD_STRETCH:
-      case KEYWORD_COLOR:
-	break;
-      default:
-	LogError("Invalid background mode %s\n", value.addr);
-      }
-  get_cfg_string(db, "username.prompt.string", &cfg->username_prompt,
-		 xstrdup("Username: "));
-  get_cfg_string(db, "password.prompt.string", &cfg->password_prompt,
-		 xstrdup("Password: "));
-
-  cfg->password_display =
-    !XrmGetResource(db, "password.input.display", DUMMY_RESOURCE_CLASS,
-		    &type, &value)
-    ? '*'
-    : (value.addr)[1];
-    
-
+#if defined(TESTING) && defined(BREAK)
   __asm__("int3");
-  free(themes);
+#endif
+
   free(theme_directory);
-
-  return cfg;
+  free(themes);
+  return &cfg;
 }
 
-void free_cfg(Display *dpy, struct cfg *cfg)
+void release_cfg(Display *dpy, struct cfg *cfg)
 {
-  int scr = DefaultScreen(dpy);
-  Visual *visual = DefaultVisual(dpy, scr);
-  Colormap colormap = DefaultColormap(dpy, scr);
+  struct resource_spec *spec = cfg_resources;
+  for (int i = 0; i < NUM_CFG ; i++, spec++)
+    {
+      if (spec->free && *(int *)((char *)cfg + spec->allocated))
+	(spec->free)(dpy, (void **)((char *)cfg + spec->offset));
+    }
 
-  for (int i = cfg->command_count; i-- > 0;)
-    free_command(&(cfg->commands[i]));
+  spec = theme_resources;
+  for (int i = 0; i < NUM_THEME ; i++, spec++)
+    {
+      if (spec->free && *(int *)((char *)cfg + spec->allocated))
+	(spec->free)(dpy, (void **)((char *)cfg + spec->offset));
+    }
+
+  for (int i = 0; i < cfg->command_count; i++)
+    {
+      struct command *cmd = &cfg->commands[i];
+      spec = cmd_resources;
+      for (int j = 0; j < NUM_CMD ; j++, spec++)
+	{
+	  if (spec->free && *(int *)((char *)cmd + spec->allocated))
+	    (spec->free)(dpy, (void **)((char *)cmd + spec->offset));
+	}
+      
+      free(cmd->action_params);
+    }
+
   free(cfg->commands);
-  free(cfg->welcome_message);
-  free(cfg->default_user);
-  free(cfg->sessions);
-  free(cfg->username_prompt);
-  free(cfg->password_prompt);
-  XftFontClose(dpy, cfg->message_font);
-  XftFontClose(dpy, cfg->welcome_font);
-  XftFontClose(dpy, cfg->input_font);
-  XftFontClose(dpy, cfg->user_font);
-  XftFontClose(dpy, cfg->pass_font);
-  XftColorFree(dpy, visual, colormap, &cfg->background_color);
-  XftColorFree(dpy, visual, colormap, &cfg->message_color);
-  XftColorFree(dpy, visual, colormap, &cfg->message_shadow_color);
-  XftColorFree(dpy, visual, colormap, &cfg->welcome_color);
-  XftColorFree(dpy, visual, colormap, &cfg->welcome_shadow_color);
-  XftColorFree(dpy, visual, colormap, &cfg->user_color);
-  XftColorFree(dpy, visual, colormap, &cfg->user_shadow_color);
-  XftColorFree(dpy, visual, colormap, &cfg->pass_color);
-  XftColorFree(dpy, visual, colormap, &cfg->pass_shadow_color);
-  XftColorFree(dpy, visual, colormap, &cfg->input_color);
-  XftColorFree(dpy, visual, colormap, &cfg->input_alternate_color);
-  XftColorFree(dpy, visual, colormap, &cfg->input_shadow_color);
-
-  free(cfg);
 }
 
-#if 1
 int main(int argc, char *argv[])
 {
   Display *dpy;
 
-  struct cfg *cfg = read_cfg(dpy = XOpenDisplay(NULL));
-  free_cfg(dpy, cfg);
+  struct cfg *cfg = get_cfg(dpy = XOpenDisplay(NULL));
+  release_cfg(dpy, cfg);
   XCloseDisplay(dpy);
+
   return 0;
 }
-#endif

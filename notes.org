@@ -10,6 +10,3 @@
    -- How to handle key binds in config file?
 
 ** Handle expose.
-
-** Simple config parser w. symbol table.
-

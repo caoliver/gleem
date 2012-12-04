@@ -22,6 +22,9 @@ lookup_keyword(register const char *str, register unsigned int len);
 #define KEYWORD_STRETCH 15
 #define KEYWORD_COLOR 16
 
+#define KEYWORD_TRUE 17
+#define KEYWORD_FALSE 18
+
 // Action keywords
-#define KEYWORD_EXEC 17
-#define KEYWORD_SWITCH_SESSION 18
+#define KEYWORD_EXEC 19
+#define KEYWORD_SWITCH_SESSION 20
