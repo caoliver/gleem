@@ -53,8 +53,9 @@ int parse_placement(char *coords, int width, int height, int *x, int *y,
 	case KEYWORD_RIGHT:
 	case KEYWORD_ABOVE:
 	case KEYWORD_BELOW:
+	  key_num -= KEYWORD_LEFT;
 	  *flags =
-	    (*flags & flags_masked[key_num - 1]) | flags_true[key_num - 1];
+	    (*flags & flags_masked[key_num]) | flags_true[key_num];
 	  break;
 	default:
 	  goto bad_coord;

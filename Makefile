@@ -17,15 +17,21 @@ testcfg: cfg.o util.o keywords.o
 libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
 	gcc ${LDFLAGS} -shared -o $@ $^
 
+cfg.c: keywords.h
+
 install: libXdmGreet.so
 	mv -n /etc/X11/xdm/libXdmGreet.so /etc/X11/xdm/libXdmGreet.so~
 	cp libXdmGreet.so /etc/X11/xdm/libXdmGreet.so
 
-keywords.c: keywords.gperf
-	gperf -t keywords.gperf | sed -f keywords.sed >keywords.c
+keywords.c: keywords.sh
+	sh ./keywords.sh
+
+keywords.h: keywords.sh
+	sh ./keywords.sh
 
 clean:
-	rm -f ${BINS} ${OBJS} ${GOBJS} gmon.out libXdmGreet.so keywords.c
+	rm -f ${BINS} ${OBJS} ${GOBJS} gmon.out libXdmGreet.so
+	rm -f keywords.c keywords.h
 	rm -f `find -name \*~ -o -name \#\*`
 	rm -rf GTAGS GRTAGS GPATH HTML
 
