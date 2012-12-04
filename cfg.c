@@ -111,7 +111,7 @@ static int get_cfg_string(Display *dpy, XrmDatabase db, const char *name,
 
   if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
     {
-      *(char **)valptr = *(char **)default_value;
+      *(char **)valptr = (char *)default_value;
       return ALLOC_STATIC;
     }
 
@@ -142,11 +142,6 @@ static void free_cfg_string(Display *dpy, void **ptr)
   *ptr = NULL;
 }
 
-int Zero = 0;
-#define untrue Zero
-char *Null = NULL;
-int default_message_duration = DEFAULT_MESSAGE_DURATION;
-int default_command_count = DEFAULT_COMMAND_COUNT;
 
 static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
 			       void *valptr, void *default_value)
@@ -332,6 +327,12 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
     }
 }
 
+int Zero = 0;
+#define Untrue Zero
+
+int default_message_duration = DEFAULT_MESSAGE_DURATION;
+int default_command_count = DEFAULT_COMMAND_COUNT;
+
 #define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
   {   #NAME,						\
       ALLOC, NULL,					\
@@ -344,19 +345,26 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
       offsetof(struct DECL_STRUCT, FIELD),		\
       offsetof(struct DECL_STRUCT, FIELD##_ALLOC) }
 
+#define DECLSTRING(NAME, DEFAULT, PLACE) \
+  DECLDYNAMIC(NAME, get_cfg_string,  free_cfg_string, DEFAULT, PLACE)
+
+#define DECLCOLOR(NAME, DEFAULT, PLACE)					\
+  DECLDYNAMIC(NAME, get_cfg_color, free_cfg_color, DEFAULT_##DEFAULT, PLACE)
+
+#define DECLFONT(NAME, DEFAULT, PLACE)					\
+  DECLDYNAMIC(NAME, get_cfg_font, free_cfg_font, DEFAULT_##DEFAULT, PLACE)
+
 #define DECL_STRUCT cfg
 
 struct resource_spec cfg_resources[] = {
-  DECLSTATIC(ignore-capslock, get_cfg_boolean, &untrue, ignore_capslock),
-  DECLSTATIC(numlock, get_cfg_boolean, &untrue, numlock),
-  DECLSTATIC(hide-mouse, get_cfg_boolean, &untrue, hide_mouse),
-  DECLSTATIC(auto-login, get_cfg_boolean, &untrue, auto_login),
-  DECLSTATIC(focus-password, get_cfg_boolean, &untrue, auto_login),
-  DECLDYNAMIC(default-user, get_cfg_string, free_cfg_string,
-	      &Null, default_user),
-  DECLDYNAMIC(welcome-message, get_cfg_string, free_cfg_string,
-	      DEFAULT_WELCOME_MESSAGE, welcome_message),
-  DECLDYNAMIC(sessions, get_cfg_string, free_cfg_string, NULL, sessions),
+  DECLSTATIC(ignore-capslock, get_cfg_boolean, &Untrue, ignore_capslock),
+  DECLSTATIC(numlock, get_cfg_boolean, &Untrue, numlock),
+  DECLSTATIC(hide-mouse, get_cfg_boolean, &Untrue, hide_mouse),
+  DECLSTATIC(auto-login, get_cfg_boolean, &Untrue, auto_login),
+  DECLSTATIC(focus-password, get_cfg_boolean, &Untrue, auto_login),
+  DECLSTRING(default-user, NULL, default_user),
+  DECLSTRING(welcome-message, DEFAULT_WELCOME_MESSAGE, welcome_message),
+  DECLSTRING(sessions, NULL, sessions),
   DECLSTATIC(message-duration, get_cfg_count, &default_message_duration,
 	     message_duration),
   DECLSTATIC(command.scan-to, get_cfg_count, &default_command_count,
@@ -365,22 +373,13 @@ struct resource_spec cfg_resources[] = {
 
 #define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
 
-#define DECLCOLOR(NAME, DEFAULT, PLACE)					\
-  DECLDYNAMIC(NAME, get_cfg_color, free_cfg_color, DEFAULT_##DEFAULT, PLACE)
-
-#define DECLFONT(NAME, DEFAULT, PLACE)					\
-  DECLDYNAMIC(NAME, get_cfg_font, free_cfg_font, DEFAULT_##DEFAULT, PLACE)
-
-
 struct resource_spec theme_resources[] = {
   DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
 	     background_style),
   DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
 	     password_mask),
-  DECLDYNAMIC(password.prompt.string, get_cfg_string, free_cfg_string,
-	      DEFAULT_PASS_PROMPT, password_prompt),
-  DECLDYNAMIC(username.prompt.string, get_cfg_string, free_cfg_string,
-	      DEFAULT_USER_PROMPT, username_prompt),
+  DECLSTRING(password.prompt.string, DEFAULT_PASS_PROMPT, password_prompt),
+  DECLSTRING(username.prompt.string, DEFAULT_USER_PROMPT, username_prompt),
   DECLCOLOR(background.color, BKGND_COLOR, background_color),
   DECLCOLOR(message.color, MESSAGE_COLOR, message_color),
   DECLCOLOR(message.shadow.color, MESSAGE_SHADOW_COLOR, message_shadow_color),
@@ -407,11 +406,11 @@ struct resource_spec theme_resources[] = {
 #define DECL_STRUCT command
 
 struct resource_spec cmd_resources[] = {
-  { "shortcut", get_cmd_shortcut, NULL, &Null, 0, 0 },
+  { "shortcut", get_cmd_shortcut, NULL, NULL, 0, 0 },
   DECLSTATIC(delay, get_cfg_count, &Zero, delay),
-  DECLDYNAMIC(name, get_cfg_string, free_cfg_string, &Null, name),
-  DECLDYNAMIC(message, get_cfg_string, free_cfg_string, &Null, message),
-  DECLDYNAMIC(users, get_cfg_string, free_cfg_string, &Null, allowed_users),
+  DECLSTRING(name, NULL, name),
+  DECLSTRING(message, NULL, message),
+  DECLSTRING(users, NULL, allowed_users),
 };
 
 #define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
@@ -442,7 +441,7 @@ struct cfg *get_cfg(Display *dpy)
   cfg.current_session = cfg.sessions;
   get_cfg_string(dpy, db, MAIN_PREFIX "theme-directory",
 		 &theme_directory, xstrdup("."));
-  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes, &Null);
+  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes, NULL);
 
   if (cfg.command_count < 16)
     cfg.command_count = 16;
