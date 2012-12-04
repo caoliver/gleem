@@ -8,6 +8,7 @@
 #include "util.h"
 #include "keywords.h"
 #include "cfg.h"
+#include "defaults.h"
 
 #if __STDC_VERSION__ >= 199901L
 #define INLINE_DECL inline
@@ -50,7 +51,7 @@ struct resource_spec {
       ALLOC, FREE,					\
       DEFAULT,						\
       offsetof(struct DECL_STRUCT, FIELD),		\
-      offsetof(struct DECL_STRUCT, FIELD##_allocated) }
+      offsetof(struct DECL_STRUCT, FIELD##ALLOC_TAG) }
 
 
 static INLINE_DECL const char *skip_space(const char *str)

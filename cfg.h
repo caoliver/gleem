@@ -1,87 +1,64 @@
 #ifndef _CFG_H_
 #define _CFG_H_
 
-#define DEFAULT_WELCOME_MESSAGE "Welcome to %host"
-#define DEFAULT_MESSAGE_DURATION 3
-#define DEFAULT_COMMAND_COUNT 16
+#define ALLOC_TAG _allocated
 
-#define DEFAULT_BKGND_STYLE "color"
-#define DEFAULT_BKGND_COLOR "black"
-#define DEFAULT_MESSAGE_COLOR "white"
-#define DEFAULT_MESSAGE_SHADOW_COLOR "gray"
-#define DEFAULT_WELCOME_COLOR "white"
-#define DEFAULT_WELCOME_SHADOW_COLOR "gray"
-#define DEFAULT_USER_COLOR "white"
-#define DEFAULT_USER_SHADOW_COLOR "gray"
-#define DEFAULT_PASS_COLOR "white"
-#define DEFAULT_PASS_SHADOW_COLOR "gray"
-#define DEFAULT_INPUT_COLOR "DeepSkyBlue4"
-#define DEFAULT_INPUT_ALTERNATE_COLOR "RoyalBlue4"
-#define DEFAULT_INPUT_SHADOW_COLOR "grey25"
-
-#define DEFAULT_MESSAGE_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_WELCOME_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_INPUT_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_USER_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_PASS_FONT "Verdana:size=14:dpi=75"
-
-#define DEFAULT_USER_PROMPT "Username: "
-#define DEFAULT_PASS_PROMPT "Password: "
-
-#define DEFAULT_PASS_MASK "*"
-
-#define WITH_FREE_FLAG(TYPE, NAME) TYPE NAME; int NAME##_allocated
+#define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##ALLOC_TAG
 
 struct command {
-  WITH_FREE_FLAG(char *, name);
   int action;  // Keyword whitespace [optional params]
   char* action_params;
   int delay;
-  WITH_FREE_FLAG(char *, message);
   KeySym keysym;
   unsigned mod_state;
-  WITH_FREE_FLAG(char *, allowed_users);
+  ADD_ALLOC_FLAG(char *, name);
+  ADD_ALLOC_FLAG(char *, message);
+  ADD_ALLOC_FLAG(char *, allowed_users);
 };
 
 struct cfg {
-  int numlock, ignore_capslock, hide_mouse;
-  int auto_login, focus_password;
-  int message_duration;
-  WITH_FREE_FLAG(char *, default_user);
-  WITH_FREE_FLAG(char *, welcome_message);
-  WITH_FREE_FLAG(char *, sessions);
-  char *current_session;  // whitespace list and ptr to current
-  int command_count;
-  struct command *commands;
-
-  WITH_FREE_FLAG(XftColor, background_color);
-  WITH_FREE_FLAG(XftColor, message_color);
-  WITH_FREE_FLAG(XftColor, message_shadow_color);
-  WITH_FREE_FLAG(XftColor, welcome_color);
-  WITH_FREE_FLAG(XftColor, welcome_shadow_color);
-  WITH_FREE_FLAG(XftColor, user_color);
-  WITH_FREE_FLAG(XftColor, user_shadow_color);
-  WITH_FREE_FLAG(XftColor, pass_color);
-  WITH_FREE_FLAG(XftColor, pass_shadow_color);
-  WITH_FREE_FLAG(XftColor, input_color);
-  WITH_FREE_FLAG(XftColor, input_alternate_color);
-  WITH_FREE_FLAG(XftColor, input_shadow_color);
-
-  WITH_FREE_FLAG(XftFont *, message_font);
-  WITH_FREE_FLAG(XftFont *, welcome_font);
-  WITH_FREE_FLAG(XftFont *, input_font);
-  WITH_FREE_FLAG(XftFont *, pass_font);
-  WITH_FREE_FLAG(XftFont *, user_font);
-
+  int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
+  int message_duration, command_count;
   int background_style;
-
-  WITH_FREE_FLAG(char *, username_prompt);
-  WITH_FREE_FLAG(char *, password_prompt);
   char password_mask;
+  struct command *commands;
+  char *current_session;  // Pointer into session string.
+  ADD_ALLOC_FLAG(XftColor, background_color);
+  ADD_ALLOC_FLAG(XftColor, message_color);
+  ADD_ALLOC_FLAG(XftColor, message_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, welcome_color);
+  ADD_ALLOC_FLAG(XftColor, welcome_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, user_color);
+  ADD_ALLOC_FLAG(XftColor, user_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, pass_color);
+  ADD_ALLOC_FLAG(XftColor, pass_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, input_color);
+  ADD_ALLOC_FLAG(XftColor, input_alternate_color);
+  ADD_ALLOC_FLAG(XftColor, input_shadow_color);
+  ADD_ALLOC_FLAG(XftFont *, message_font);
+  ADD_ALLOC_FLAG(XftFont *, welcome_font);
+  ADD_ALLOC_FLAG(XftFont *, input_font);
+  ADD_ALLOC_FLAG(XftFont *, pass_font);
+  ADD_ALLOC_FLAG(XftFont *, user_font);
+  ADD_ALLOC_FLAG(char *, default_user);
+  ADD_ALLOC_FLAG(char *, welcome_message);
+  ADD_ALLOC_FLAG(char *, sessions);
+  ADD_ALLOC_FLAG(char *, username_prompt);
+  ADD_ALLOC_FLAG(char *, password_prompt);
 };
 
 
-struct cfg *read_cfg(Display *dpy);
-void free_cfg(Display *dpy, struct cfg *cfg);
+struct cfg *get_cfg(Display *dpy);
+void release_cfg(Display *dpy, struct cfg *cfg);
+
+#define X_IS_PIXEL_COORD 1
+#define Y_IS_PIXEL_COORD 2
+#define PUT_CENTER 0
+#define PUT_LEFT 4
+#define PUT_RIGHT 8
+#define PUT_ABOVE 16
+#define PUT_BELOW 32
+#define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
+#define VERT_MASK (PUT_ABOVE | PUT_BELOW)
 
 #endif /* _CFG_H_ */

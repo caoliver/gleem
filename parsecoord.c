@@ -1,31 +1,22 @@
-#include <stdio.h>
-#include <err.h>
+#include <X11/Xlib.h>
+#include <X11/Xft/Xft.h>
 #include "keywords.h"
+#include "cfg.h"
 
-#define INLINE_DECL
+char *skip_space(char *), *scan_to_space(char *);
 
-#define PIXEL_X 1
-#define PIXEL_Y 2
-#define H_MASK (3 << 2)
-#define LEFT (1 << 2)
-#define RIGHT (2 << 2)
-#define V_MASK (3 << 4)
-#define ABOVE (1 << 4)
-#define BELOW (2 << 4)
-
-static INLINE_DECL const char *skip_space(const char *str)
-{
-  while (isspace(*str))
-    str++;
-  return str;
-}
-
-static INLINE_DECL const char *scan_to_space(const char *str)
-{
-  while (*str && !isspace(*str))
-    str++;
-  return str;
-}
+#define SCAN_COORD(COORD, DIMEN, FLAG)		\
+  scan = strtol(str, &end, 10);			\
+  if (str == end)				\
+    goto bad_coord;				\
+  if (*end == '%')				\
+    {						\
+      *flags |= FLAG;				\
+      *COORD = (DIMEN * scan) / 100;		\
+      end++;					\
+    }						\
+  else						\
+    *COORD += scan
 
 int parse_placement(char *coords, int width, int height, int *x, int *y,
 		    int *flags)
@@ -33,80 +24,45 @@ int parse_placement(char *coords, int width, int height, int *x, int *y,
   long scan;
   char *end, *str = coords;
 
-  *flags &= ~(PIXEL_X | PIXEL_Y);
-
-  scan = strtol(str, &end, 10);
-  if (str == end)
-    goto bad_num;
-  if (*end == '%')
-    {
-      *flags |= PIXEL_X;
-      *x = (width * scan) / 100;
-      end++;
-    }
-  else
-    *x += scan;
+  *flags &= ~(X_IS_PIXEL_COORD | Y_IS_PIXEL_COORD);
+  SCAN_COORD(x, width, X_IS_PIXEL_COORD);
   if (!isspace(*end))
-    goto bad_num;
+    goto bad_coord;
   str = end;
-  scan = strtol(str, &end, 10);
-  if (str == end)
-    goto bad_num;
-  if (*end == '%')
-    {
-      *flags |= PIXEL_Y;
-      *y = (height * scan) / 100;
-      end++;
-    }
-  else
-    *y += scan;
+  SCAN_COORD(y, height, Y_IS_PIXEL_COORD);
   if (!*end)
     return 1;
   if (!isspace(*end))
-    goto bad_num;
+    goto bad_coord;
 
   str = skip_space(end);
   while (*str)
     {
+      static int flags_true[5] =
+	{ PUT_LEFT, PUT_RIGHT, PUT_ABOVE, PUT_BELOW, PUT_CENTER };
+      static int flags_masked[5] =
+	{ ~HORIZ_MASK, ~HORIZ_MASK, ~VERT_MASK, ~VERT_MASK, 0 };
+      int key_num;
+
       end = scan_to_space(str);
-      switch (lookup_keyword(str, end-str))
+      switch (key_num = lookup_keyword(str, end-str))
 	{
 	case KEYWORD_C:
-	case KEYWORD_CENTER:
-	  *flags &= ~(H_MASK | V_MASK);
-	  break;
+	  key_num = KEYWORD_CENTER;
 	case KEYWORD_LEFT:
-	  *flags = (*flags & ~H_MASK) | LEFT;
-	  break;
 	case KEYWORD_RIGHT:
-	  *flags = (*flags & ~H_MASK) | RIGHT;
-	  break;
 	case KEYWORD_ABOVE:
-	  *flags = (*flags & ~V_MASK) | ABOVE;
-	  break;
 	case KEYWORD_BELOW:
-	  *flags = (*flags & ~V_MASK) | BELOW;
+	  *flags =
+	    (*flags & flags_masked[key_num - 1]) | flags_true[key_num - 1];
 	  break;
 	default:
-	  goto bad_num;
+	  goto bad_coord;
 	}
       str = skip_space(end);
     }
 
   return 1;
- bad_num:
-  return 0;
-}
-
-int main(int argc, char *argv[])
-{
-  if (argc < 2)
-    return 0;
-  int x = 50, y = 400, flags = 0;
-
-  if (!parse_placement(argv[1], 1024, 768, &x, &y, &flags))
-    errx(1, "Bad coordinates");
-  printf("%d %d %x\n", x, y, flags);
-
+ bad_coord:
   return 0;
 }
