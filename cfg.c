@@ -367,6 +367,7 @@ struct resource_spec cfg_resources[] = {
   DECLSTRING(sessions, NULL, sessions),
   DECLSTATIC(message-duration, get_cfg_count, &default_message_duration,
 	     message_duration),
+  DECLSTATIC(xinerama-screen, get_cfg_count, &Zero, xinerama_screen),
   DECLSTATIC(command.scan-to, get_cfg_count, &default_command_count,
 	     command_count),
 };

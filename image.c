@@ -378,60 +378,59 @@ void merge_with_background(struct image *panel, struct image *background,
 }
 
 
-void center_background(struct image *image, unsigned width, unsigned height,
-		       unsigned int color)
+void frame_background(struct image *image,
+		      unsigned int width, unsigned int height,
+		      int xoffset, int yoffset, unsigned int color)
 {
-  if (width <= image->width && height <= image->height)
-    {
-      crop_image(image, (image->width - width)/2, (image->height - height)/2,
-		 width, height);
-      return;
-    }
-
   unsigned char
     r = color>>16 & 0xff,
     g = color>>8 & 0xff,
     b = color & 0xff;
   unsigned char *new_rgb = xmalloc(3 * width * height);
 
-  // Round up so that call with empty image always succeeds with solid fill.
-  int xoffset = ((int)width - image->width + 1)/2;
-  int yoffset = ((int)height - image->height + 1)/2;
-
   unsigned char *dst = new_rgb;
 
   int i;
   for (i = 0; i < yoffset; i++)
-    for (int j = 0; j++ < width;)
-      {
-	*dst++ = r;
-	*dst++ = g;
-	*dst++ = b;
-      }
+    {
+      if (i == height)
+	goto column_done;
+      for (int j = 0; j++ < width;)
+	{
+	  *dst++ = r;
+	  *dst++ = g;
+	  *dst++ = b;
+	}
+    }
   
   unsigned char *src = image->rgb_data -
-    3 * (yoffset < 0 ? yoffset * image->width : (xoffset < 0 ? xoffset : 0));
-
-  for (int j = yoffset < 0 ? 0 : yoffset,
-	 upper_limit = yoffset < 0 ? height : height - yoffset;
-       j < upper_limit; j++, i++, src += 3 * image->width)
+    3 * ((yoffset < 0 ? yoffset * image->width : 0)
+	 + (xoffset < 0 ? xoffset : 0));
+  int j = yoffset >= 0 ? image->height : image->height + yoffset;
+  while (j-- > 0)
     {
       int k;
+      if (i == height)
+	goto column_done;
       for (k = 0; k < xoffset; k++)
 	{
+	  if (k == width)
+	    goto row_done;
 	  *dst++ = r;
 	  *dst++ = g;
 	  *dst++ = b;
 	}
 
       unsigned char *src_ptr = src;
-      for (int j = xoffset < 0 ? 0 : xoffset,
-	     upper_limit = xoffset < 0 ? width : width - xoffset;
-	   j < upper_limit; j++, k++)
+      int n = xoffset >= 0 ? image->width : image->width + xoffset;
+      while (n-- > 0)
 	{
+	  if (k == width)
+	    goto row_done;
 	  *dst++ = *src_ptr++;
 	  *dst++ = *src_ptr++;
 	  *dst++ = *src_ptr++;
+	  k++;
 	}
 
       while (k++ < width)
@@ -440,6 +439,9 @@ void center_background(struct image *image, unsigned width, unsigned height,
 	  *dst++ = g;
 	  *dst++ = b;
 	}
+    row_done:
+      i++;
+      src += 3 * image->width;
     }
 
   while (i++ < height)
@@ -450,6 +452,7 @@ void center_background(struct image *image, unsigned width, unsigned height,
 	*dst++ = b;
       }
 
+ column_done:
   free(image->rgb_data);
   free(image->alpha_data);
   image->rgb_data = new_rgb;

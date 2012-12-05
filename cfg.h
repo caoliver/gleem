@@ -16,7 +16,7 @@ struct command {
 
 struct cfg {
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
-  int message_duration, command_count;
+  int message_duration, command_count, xinerama_screen;
   int background_style;
   char password_mask;
   struct command *commands;
