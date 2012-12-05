@@ -527,6 +527,7 @@ void release_cfg(Display *dpy, struct cfg *cfg)
   free(cfg->commands);
 }
 
+#ifdef TESTING
 int main(int argc, char *argv[])
 {
   Display *dpy;
@@ -537,3 +538,4 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+#endif

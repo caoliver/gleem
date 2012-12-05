@@ -458,24 +458,16 @@ void center_background(struct image *image, unsigned width, unsigned height,
   image->area = width * height;
 }
 
-void tile_background(struct image *image, int width, int height)
+void tile_background(struct image *image, int width, int height,
+		     int xoffset, int yoffset)
 {
-  int col_start = 0;
-  int row_num = 0;
+  int col_start, row_num;
 
-  if (width < 0)
-    {
-      width = -width;
-      int ceiling = (width + image->width - 1) / image->width;
-      col_start = (image->width * ceiling - width) / 2;
-    }
+  if ((col_start = -xoffset % image->width) < 0)
+    col_start += image->width;
 
-  if (height < 0)
-    {
-      height = -height;
-      int ceiling = (height + image->height - 1) / image->height;
-      row_num = (image->height * ceiling - height) / 2;
-    }
+  if ((row_num = -yoffset % image->height) < 0)
+    row_num += image->height;
 
   unsigned char *new_rbg = xmalloc(3 * width * height);
 
