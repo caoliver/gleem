@@ -394,7 +394,7 @@ void frame_background(struct image *image,
   for (i = 0; i < yoffset; i++)
     {
       if (i == height)
-	goto column_done;
+	goto window_done;
       for (int j = 0; j++ < width;)
 	{
 	  *dst++ = r;
@@ -411,7 +411,7 @@ void frame_background(struct image *image,
     {
       int k;
       if (i == height)
-	goto column_done;
+	goto window_done;
       for (k = 0; k < xoffset; k++)
 	{
 	  if (k == width)
@@ -452,7 +452,7 @@ void frame_background(struct image *image,
 	*dst++ = b;
       }
 
- column_done:
+ window_done:
   free(image->rgb_data);
   free(image->alpha_data);
   image->rgb_data = new_rgb;
