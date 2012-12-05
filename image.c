@@ -389,70 +389,60 @@ void frame_background(struct image *image,
   unsigned char *new_rgb = xmalloc(3 * width * height);
 
   unsigned char *dst = new_rgb;
-
-  int i;
-  for (i = 0; i < yoffset; i++)
+  for (int i = width * height; i--;)
     {
-      if (i == height)
-	goto window_done;
-      for (int j = 0; j++ < width;)
+      *dst++ = r;
+      *dst++ = g;
+      *dst++ = b;
+    }
+
+  if (xoffset < (int)width &&
+      yoffset < (int)height &&
+      image->width >= - xoffset &&
+      image->height >= - yoffset)
+    {
+      unsigned char
+	*dst =
+	new_rgb + 3 * ((yoffset < 0 ? 0 : width * yoffset) +
+		       (xoffset < 0 ? 0 : xoffset)),
+
+	*src =
+	image->rgb_data - 3 * ((yoffset < 0 ? yoffset * image->width : 0) +
+			       (xoffset < 0 ? xoffset : 0));
+
+      int
+	rows = height > image->height + yoffset
+	? image->height + yoffset
+	: height - yoffset < height
+	? height - yoffset
+	: height,
+
+	num_cols = width > image->width + xoffset
+	? image->width + xoffset
+	: width - xoffset < width
+	? width - xoffset
+	: width;
+
+      printf("rows %d cols %d\n", rows, num_cols);
+
+      while (rows--)
 	{
-	  *dst++ = r;
-	  *dst++ = g;
-	  *dst++ = b;
+	  char *rowsrc = src, *rowdst = dst;
+	  int cols = num_cols;
+
+	  while (cols--)
+	    {
+	      *rowdst++ = *rowsrc++;
+	      *rowdst++ = *rowsrc++;
+	      *rowdst++ = *rowsrc++;
+	    }
+
+	  dst += 3 * width;
+	  src += 3 * image->width;
 	}
     }
   
-  unsigned char *src = image->rgb_data -
-    3 * ((yoffset < 0 ? yoffset * image->width : 0)
-	 + (xoffset < 0 ? xoffset : 0));
-  int j = yoffset >= 0 ? image->height : image->height + yoffset;
-  while (j-- > 0)
-    {
-      int k;
-      if (i == height)
-	goto window_done;
-      for (k = 0; k < xoffset; k++)
-	{
-	  if (k == width)
-	    goto row_done;
-	  *dst++ = r;
-	  *dst++ = g;
-	  *dst++ = b;
-	}
 
-      unsigned char *src_ptr = src;
-      int n = xoffset >= 0 ? image->width : image->width + xoffset;
-      while (n-- > 0)
-	{
-	  if (k == width)
-	    goto row_done;
-	  *dst++ = *src_ptr++;
-	  *dst++ = *src_ptr++;
-	  *dst++ = *src_ptr++;
-	  k++;
-	}
-
-      while (k++ < width)
-	{
-	  *dst++ = r;
-	  *dst++ = g;
-	  *dst++ = b;
-	}
-    row_done:
-      i++;
-      src += 3 * image->width;
-    }
-
-  while (i++ < height)
-    for (int j = 0; j++ < width;)
-      {
-	*dst++ = r;
-	*dst++ = g;
-	*dst++ = b;
-      }
-
- window_done:
   free(image->rgb_data);
   free(image->alpha_data);
   image->rgb_data = new_rgb;
@@ -460,6 +450,7 @@ void frame_background(struct image *image,
   image->height = height;
   image->area = width * height;
 }
+
 
 void tile_background(struct image *image, int width, int height,
 		     int xoffset, int yoffset)
