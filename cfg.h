@@ -16,6 +16,14 @@ struct position {
   int x, y, flags;
 };
 
+#define TRANSLATION_IS_CACHED 1
+
+#define TRANSLATE_POSITION(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)	\
+  if (!((POSITION)->flags & TRANSLATION_IS_CACHED))			\
+    translate_position(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)
+
+#define POSITION_TO_XY(POSITION) (POSITION).x, (POSITION).y
+
 #define PANEL_POSITION_NAME panel_coords
 
 struct command {
@@ -65,7 +73,7 @@ struct cfg {
 
 struct cfg *get_cfg(Display *dpy);
 void release_cfg(Display *dpy, struct cfg *cfg);
-void position_to_coord(struct position *posn, int *x, int *y,
-		       int width, int height, struct cfg* cfg, int is_text);
+void position_to_coord(struct position *posn, int width, int height,
+		       struct cfg* cfg, int is_text);
 
 #endif /* _CFG_H_ */

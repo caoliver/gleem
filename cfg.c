@@ -32,13 +32,13 @@
 #define COMMAND_PREFIX MAIN_PREFIX "command."
 #define THEME_PREFIX ""
 
-#define X_IS_PANEL_COORD 1
-#define Y_IS_PANEL_COORD 2
+#define X_IS_PANEL_COORD 2
+#define Y_IS_PANEL_COORD 4
 #define PUT_CENTER 0
-#define PUT_LEFT 4
-#define PUT_RIGHT 8
-#define PUT_ABOVE 16
-#define PUT_BELOW 32
+#define PUT_LEFT 8
+#define PUT_RIGHT 16
+#define PUT_ABOVE 32
+#define PUT_BELOW 64
 #define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
 #define VERT_MASK (PUT_ABOVE | PUT_BELOW)
 
@@ -683,41 +683,49 @@ void release_cfg(Display *dpy, struct cfg *cfg)
   free(cfg->commands);
 }
 
-void position_to_coord(struct position *posn, int *x, int *y,
-		       int width, int height, struct cfg* cfg, int is_text)
+void translate_position(struct position *posn, int width, int height,
+		        struct cfg* cfg, int is_text)
 {
-  *x = posn->x;
-  *y = posn->y;
+  if (posn->flags & TRANSLATION_IS_CACHED)
+    return;
+
+  posn->flags |= TRANSLATION_IS_CACHED;
   switch (posn->flags & HORIZ_MASK)
     {
     case PUT_LEFT:
-      *x -= width;
+      posn->x -= width;
       break;
     case PUT_CENTER:
-      *x -= width >> 2;
+      posn->x -= width / 2;
     }
   if (posn->flags & X_IS_PANEL_COORD)
-    *x += cfg->PANEL_POSITION_NAME.x;
+    posn->x += cfg->PANEL_POSITION_NAME.x;
   switch (posn->flags & VERT_MASK)
     {
     case PUT_ABOVE:
-      *y -= height;
+      posn->y -= height;
       break;
     case PUT_CENTER:
-      *y -= height >> 2;
+      posn->y -= height / 2;
     }
-  if (is_text)
-    y += height;
   if (posn->flags & Y_IS_PANEL_COORD)
-    *y += cfg->PANEL_POSITION_NAME.y;
+    posn->y += cfg->PANEL_POSITION_NAME.y;
+  if (is_text)
+    posn->y += height;
 }
 
 #ifdef TESTING
 int main(int argc, char *argv[])
 {
   Display *dpy;
+  struct position pn = { 100, 100, X_IS_PANEL_COORD | Y_IS_PANEL_COORD };
 
   struct cfg *cfg = get_cfg(dpy = XOpenDisplay(NULL));
+
+  printf("Old coords are: %d %d\n", POSITION_TO_XY(pn));
+  TRANSLATE_POSITION(&pn, 50, 50, cfg, 0);
+  printf("New coords are: %d %d\n", POSITION_TO_XY(pn));
+
   release_cfg(dpy, cfg);
   XCloseDisplay(dpy);
 
