@@ -1,6 +1,6 @@
 INCLUDES=-Ixdm-1.1.11 -Ixdm-1.1.11/include  -I/usr/include/freetype2
 CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall -pedantic
-LDFLAGS+=-ljpeg -lpng -lX11 -lXft -ldl
+LDFLAGS+=-ljpeg -lpng -lX11 -lXft -lXinerama -ldl
 
 GOBJS=greet.o
 OBJS=image.o numlock.o jpeg.o png.o util.o cfg.o keywords.o
@@ -36,5 +36,5 @@ clean:
 	rm -rf GTAGS GRTAGS GPATH HTML
 
 tags:
-	gtags .
+	gtags
 	htags

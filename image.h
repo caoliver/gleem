@@ -15,7 +15,7 @@ void merge_with_background(struct image *panel, struct image *background,
 			   unsigned int xoffset, unsigned int yoffset);
 void frame_background(struct image *image,
 		      unsigned int width, unsigned int height,
-		      int xoffset, int yoffset, unsigned int color);
+		      int xoffset, int yoffset, XftColor *color);
 void tile_background(struct image *image, int width, int height,
 		     int xoffset, int yoffset);
 

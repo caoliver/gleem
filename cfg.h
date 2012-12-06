@@ -3,6 +3,15 @@
 
 #define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
 
+struct screen_specs {
+  unsigned int xoffset;
+  unsigned int yoffset;
+  unsigned int width;
+  unsigned int height;
+  unsigned int total_width;
+  unsigned int total_height;
+};
+
 struct command {
   int action;  // Keyword whitespace [optional params]
   char* action_params;
@@ -16,7 +25,8 @@ struct command {
 
 struct cfg {
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
-  int message_duration, command_count, xinerama_screen;
+  int message_duration, command_count;
+  struct screen_specs screen_specs;
   int background_style;
   char password_mask;
   struct command *commands;

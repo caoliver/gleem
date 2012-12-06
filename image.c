@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <X11/Xlib.h>
+#include <X11/Xft/Xft.h>
 #include <X11/Xmu/WinUtil.h>
 #include "image.h"
 #include "util.h"
@@ -342,12 +343,12 @@ void merge_with_background(struct image *panel, struct image *background,
 
 void frame_background(struct image *image,
 		      unsigned int width, unsigned int height,
-		      int xoffset, int yoffset, unsigned int color)
+		      int xoffset, int yoffset, XftColor *color)
 {
   unsigned char
-    r = color>>16 & 0xff,
-    g = color>>8 & 0xff,
-    b = color & 0xff;
+    r = color->color.red >> 8,
+    g = color->color.green >> 8,
+    b = color->color.blue >> 8;
   unsigned char *new_rgb = xmalloc(3 * width * height);
 
   unsigned char *dst = new_rgb;

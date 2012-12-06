@@ -3,6 +3,7 @@
 #include <X11/Xft/Xft.h>
 #include <X11/Xresource.h>
 #include <X11/XKBlib.h>
+#include <X11/extensions/Xinerama.h>
 #include <stddef.h>
 #include <ctype.h>
 #include "util.h"
@@ -95,12 +96,70 @@ static int get_cfg_count(Display *dpy, XrmDatabase db, const char *name,
 
   *(int *)valptr = strtol(value.addr, &end, 10);
   if (end != value.addr &&
-      (end - value.addr) == strlen(value.addr) &&
+      end - value.addr == value.size - 1 &&
       *(int *)valptr >= 0)
     return ALLOC_STATIC;
 
   LogError("Invalid count resource %s for %s\n", value.addr, name);
   exit(UNMANAGE_DISPLAY);
+}
+
+static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
+			    void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+  XineramaScreenInfo *screen_info;
+  struct screen_specs *specs = (struct screen_specs *)valptr;
+  int num_screens, desired_screen = *(int *)default_value;
+
+  int scr = DefaultScreen(dpy);
+  specs->total_width = XWidthOfScreen(ScreenOfDisplay(dpy, scr));
+  specs->total_height = XHeightOfScreen(ScreenOfDisplay(dpy, scr));
+
+  if (!XineramaIsActive(dpy))
+    {
+      specs->xoffset = 0;
+      specs->yoffset = 0;
+      specs->width = specs->total_width;
+      specs->height = specs->total_height;
+      return ALLOC_STATIC;
+    }
+
+  if (!(screen_info = XineramaQueryScreens(dpy, &num_screens)) ||
+      num_screens == 0)
+    {
+      LogError("Xinerama not reporting screens.\n");
+      exit(UNMANAGE_DISPLAY);
+    }
+
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    {
+      char *end;
+      int new_value = strtol(value.addr, &end, 10);
+      if (value.addr == end || end - value.addr != value.size - 1)
+	LogError("Invalid Xinerama screen.  Using default.\n");
+      else
+	desired_screen = new_value;
+    }
+
+  int i;
+  for (i = 0; i < num_screens; i++)
+    if (screen_info[i].screen_number == desired_screen)
+      break;
+  if (i == num_screens)
+    {
+      LogError("Can't find Xinerama screen %d.  Using the first.\n",
+	       desired_screen);
+      i = 0;
+    }
+
+  specs->xoffset = screen_info[i].x_org;
+  specs->yoffset = screen_info[i].y_org;
+  specs->width = screen_info[i].width;
+  specs->height = screen_info[i].height;
+
+  return ALLOC_STATIC;
 }
 
 static int get_cfg_string(Display *dpy, XrmDatabase db, const char *name,
@@ -367,7 +426,7 @@ struct resource_spec cfg_resources[] = {
   DECLSTRING(sessions, NULL, sessions),
   DECLSTATIC(message-duration, get_cfg_count, &default_message_duration,
 	     message_duration),
-  DECLSTATIC(xinerama-screen, get_cfg_count, &Zero, xinerama_screen),
+  DECLSTATIC(xinerama-screen, get_cfg_xinerama, &Zero, screen_specs),
   DECLSTATIC(command.scan-to, get_cfg_count, &default_command_count,
 	     command_count),
 };
