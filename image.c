@@ -313,44 +313,6 @@ void resize_background(struct image *image, const int w, const int h)
 }
 
 
-static void crop_image(struct image *image,
-	   unsigned int x, unsigned int y,
-	   unsigned int w, unsigned int h)
-{
-  if ((x == 0 && y == 0 && w == image->width && h == image->height)
-      || x+w > image->width
-      || y+h > image->height)
-    return;
-  unsigned char *new_rgb = xmalloc(3 * w * h);
-  unsigned char *new_alpha = NULL;
-
-  unsigned char *src = image->rgb_data + 3 * (y * image->width + x);
-  unsigned char *dst = new_rgb;
-
-  int dstdelta = 3 * w, srcdelta = 3 * image->width;
-  for (int i = h; i--; dst += dstdelta, src += srcdelta)
-    memcpy(dst, src, dstdelta);
-
-  if (image->alpha_data != NULL)
-    {
-      new_alpha = xmalloc(w * h);
-      src = image->alpha_data + y * image->width + x;
-      dst = new_alpha;
-
-      for (int i = h; i--; dst += w, src += image->width)
-	memcpy(dst, src, w);
-    }
-
-  free(image->rgb_data);
-  free(image->alpha_data);
-  image->rgb_data = new_rgb;
-  image->alpha_data = new_alpha;
-  image->width = w;
-  image->height = h;
-  image->area = w * h;
-}
-
-
 void merge_with_background(struct image *panel, struct image *background,
 			   unsigned int xoffset, unsigned int yoffset)
 {
@@ -417,31 +379,19 @@ void frame_background(struct image *image,
 	? height - yoffset
 	: height,
 
-	num_cols = width > image->width + xoffset
+	cols = width > image->width + xoffset
 	? image->width + xoffset
 	: width - xoffset < width
 	? width - xoffset
 	: width;
 
-      printf("rows %d cols %d\n", rows, num_cols);
-
       while (rows--)
 	{
-	  char *rowsrc = src, *rowdst = dst;
-	  int cols = num_cols;
-
-	  while (cols--)
-	    {
-	      *rowdst++ = *rowsrc++;
-	      *rowdst++ = *rowsrc++;
-	      *rowdst++ = *rowsrc++;
-	    }
-
+      	  memcpy(dst, src, 3*cols);
 	  dst += 3 * width;
 	  src += 3 * image->width;
 	}
     }
-  
 
   free(image->rgb_data);
   free(image->alpha_data);
@@ -463,14 +413,16 @@ void tile_background(struct image *image, int width, int height,
   if ((row_num = -yoffset % image->height) < 0)
     row_num += image->height;
 
-  unsigned char *new_rbg = xmalloc(3 * width * height);
+  unsigned char *new_rgb = xmalloc(3 * width * height);
 
-  unsigned char *rgb = new_rbg;
+  unsigned char *rgb = new_rgb;
   unsigned char *row =  image->rgb_data + 3 * row_num * image->width;
+  unsigned char *image_end =
+    image->rgb_data + 3 * image->height * (image->width);
   for (int i = height; i--;)
     {
-      int col_num = col_start;
-      unsigned char *col = row + 3 * col_num;
+      unsigned char *col = row + 3 * col_start;
+      unsigned char *row_end = row + 3 * image->width;
 
       for (int j = width; j--;)
 	{
@@ -478,26 +430,19 @@ void tile_background(struct image *image, int width, int height,
 	  *rgb++ = *col++;
 	  *rgb++ = *col++;
 
-	  if (++col_num == image->width)
-	    {
-	      col_num = 0;
-	      col = row;
-	    }
+	  if (col == row_end)
+	    col = row;
 	}
 
-      if (++row_num != image->height)
-	row += 3 * image->width;
-      else
-	{
-	  row_num = 0;
-	  row = image->rgb_data;
-	}
+      row += 3 * image->width;
+      if (row == image_end)
+	row = image->rgb_data;
     }
 
   free(image->alpha_data);
   image->alpha_data = NULL;
   free(image->rgb_data);
-  image->rgb_data = new_rbg;
+  image->rgb_data = new_rgb;
   image->width = width;
   image->height = height;
   image->area = width * height;

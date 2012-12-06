@@ -272,7 +272,10 @@ void do_stuff()
 		case XK_Tab:
 		case XK_KP_Enter:
 		  test_tp(dpy, wid, msg, XROOT, YROOT, 1);
-		  test_tp(dpy, pwid, msg, XROOT-XOFF, YROOT-YOFF, 1);
+		  XDestroyWindow(dpy, pwid);
+		  XSetWindowBackground(dpy, wid,
+				       BlackPixel(dpy, DefaultScreen(dpy)));
+		  XClearWindow(dpy, wid);
 		  XSync(dpy, False);
 		  sleep(2);
 		  write(1, "Result: ", 9);
