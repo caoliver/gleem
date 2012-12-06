@@ -12,6 +12,12 @@ struct screen_specs {
   unsigned int total_height;
 };
 
+struct position {
+  int x, y, flags;
+};
+
+#define PANEL_POSITION_NAME panel_coords
+
 struct command {
   int action;  // Keyword whitespace [optional params]
   char* action_params;
@@ -31,6 +37,7 @@ struct cfg {
   char password_mask;
   struct command *commands;
   char *current_session;  // Pointer into session string.
+  struct position PANEL_POSITION_NAME;
   ADD_ALLOC_FLAG(XftColor, background_color);
   ADD_ALLOC_FLAG(XftColor, message_color);
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);
@@ -58,15 +65,7 @@ struct cfg {
 
 struct cfg *get_cfg(Display *dpy);
 void release_cfg(Display *dpy, struct cfg *cfg);
-
-#define X_IS_PIXEL_COORD 1
-#define Y_IS_PIXEL_COORD 2
-#define PUT_CENTER 0
-#define PUT_LEFT 4
-#define PUT_RIGHT 8
-#define PUT_ABOVE 16
-#define PUT_BELOW 32
-#define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
-#define VERT_MASK (PUT_ABOVE | PUT_BELOW)
+void position_to_coord(struct position *posn, int *x, int *y,
+		       int width, int height, struct cfg* cfg, int is_text);
 
 #endif /* _CFG_H_ */

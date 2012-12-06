@@ -28,6 +28,8 @@
 #define DEFAULT_USER_PROMPT "Username: "
 #define DEFAULT_PASS_PROMPT "Password: "
 
+#define DEFAULT_PANEL_POSN "50% 50% center"
+
 #define DEFAULT_PASS_MASK "*"
 
 #endif /* _DEFAULTS_H_ */

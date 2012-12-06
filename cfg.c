@@ -32,16 +32,27 @@
 #define COMMAND_PREFIX MAIN_PREFIX "command."
 #define THEME_PREFIX ""
 
+#define X_IS_PANEL_COORD 1
+#define Y_IS_PANEL_COORD 2
+#define PUT_CENTER 0
+#define PUT_LEFT 4
+#define PUT_RIGHT 8
+#define PUT_ABOVE 16
+#define PUT_BELOW 32
+#define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
+#define VERT_MASK (PUT_ABOVE | PUT_BELOW)
+
 struct resource_spec {
   char *name;
   int (*allocate)(Display *dpy, XrmDatabase db,
 		  const char *name, void *where, void *deflt);
-  void (*free)(Display *dpy, void **where);
+  void (*free)(Display *dpy, void *where);
   void *default_value;
   size_t offset;
   size_t allocated;
 };
 
+static struct cfg cfg;
 
 static INLINE_DECL const char *skip_space(const char *str)
 {
@@ -195,10 +206,10 @@ static int get_cfg_char(Display *dpy, XrmDatabase db, const char *name,
 }
 
 
-static void free_cfg_string(Display *dpy, void **ptr)
+static void free_cfg_string(Display *dpy, void *ptr)
 {
-  free(*ptr);
-  *ptr = NULL;
+  free(*(void **)ptr);
+  *(void **)ptr = NULL;
 }
 
 
@@ -225,6 +236,90 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
     }
 
   return ALLOC_STATIC;
+}
+
+#define SCAN_COORD(COORD, DIMEN, OFFSET, FLAG)				\
+  scan = strtol(str, &end, 10);						\
+  if (str == end)							\
+    goto bad_position;							\
+  if (*end == '%')							\
+    {									\
+      result_position->flags &= ~FLAG;					\
+      result_position->COORD =						\
+	(cfg.screen_specs.DIMEN * scan) / 100 +				\
+	cfg.screen_specs.OFFSET;					\
+      end++;								\
+    }									\
+  else									\
+    result_position->COORD = scan; // Needs panel offset added at use.  
+
+static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
+			    void *valptr, void *default_value)
+{
+   char *type;
+   long scan;
+   XrmValue value;
+   char *position_string = (char *)default_value;
+   struct position *result_position = valptr;
+
+   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+     position_string = value.addr;
+
+   if (!position_string)
+     goto bad_position;
+
+   const char *str = position_string;
+   char *end;
+   result_position->flags |= X_IS_PANEL_COORD | Y_IS_PANEL_COORD;
+   SCAN_COORD(x, width, xoffset, X_IS_PANEL_COORD);
+   if (!isspace(*end))
+     goto bad_position;
+   str = end;
+   SCAN_COORD(y, height, yoffset, Y_IS_PANEL_COORD);
+  if (!*end)
+    return 1;
+  if (!isspace(*end))
+    goto bad_position;
+
+  str = skip_space(end);
+  while (*str)
+    {
+      static int flags_true[5] =
+	{ PUT_LEFT, PUT_RIGHT, PUT_ABOVE, PUT_BELOW, PUT_CENTER };
+      static int flags_masked[5] =
+	{ ~HORIZ_MASK, ~HORIZ_MASK, ~VERT_MASK, ~VERT_MASK, 0 };
+      int key_num;
+
+      end = (char *)scan_to_space(str);
+      switch (key_num = lookup_keyword(str, end-str))
+	{
+	case KEYWORD_C:
+	  key_num = KEYWORD_CENTER;
+	case KEYWORD_LEFT:
+	case KEYWORD_RIGHT:
+	case KEYWORD_ABOVE:
+	case KEYWORD_BELOW:
+	  key_num -= KEYWORD_LEFT;
+	  result_position->flags =
+	    (result_position->flags & flags_masked[key_num]) |
+	    flags_true[key_num];
+	  break;
+	default:
+	  goto bad_position;
+	}
+      str = skip_space(end);
+    }
+
+
+
+   return ALLOC_STATIC;
+
+ bad_position:
+   LogError(position_string
+	    ? "Bad position for %s: %s\n"
+	    : "No position for %s\n",
+	    name, position_string);
+   exit(UNMANAGE_DISPLAY);
 }
 
 static int
@@ -302,7 +397,7 @@ static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
 {
   char *type;
   XrmValue value;
-  char *font_name = (char *)default_value;
+  char *font_name = default_value;
   int scr = DefaultScreen(dpy);
 
   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
@@ -315,7 +410,7 @@ static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
   exit(UNMANAGE_DISPLAY);
 }
 
-static void free_cfg_font(Display *dpy, void **where)
+static void free_cfg_font(Display *dpy, void *where)
 {
   XftFontClose(dpy, *(XftFont **)where);
   *(XftFont **)where = NULL;
@@ -326,7 +421,7 @@ static int get_cfg_color(Display *dpy, XrmDatabase db, const char *name,
 {
   char *type;
   XrmValue value;
-  char *color_name = (char *)default_value;
+  char *color_name = default_value;
   int scr = DefaultScreen(dpy);
   Colormap colormap = DefaultColormap(dpy, scr);
   Visual *visual = DefaultVisual(dpy, scr);
@@ -334,21 +429,20 @@ static int get_cfg_color(Display *dpy, XrmDatabase db, const char *name,
   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
     color_name = value.addr;
 
-  if (XftColorAllocName(dpy, visual, colormap, color_name,
-			(XftColor *)valptr))
+  if (XftColorAllocName(dpy, visual, colormap, color_name, valptr))
     return ALLOC_DYNAMIC;
 
   LogError("Ran out of colors\n");
   exit(RESERVER_DISPLAY);
 }
 
-static void free_cfg_color(Display *dpy, void **where)
+static void free_cfg_color(Display *dpy, void *where)
 {
   int scr = DefaultScreen(dpy);
   Colormap colormap = DefaultColormap(dpy, scr);
   Visual *visual = DefaultVisual(dpy, scr);
 
-  XftColorFree(dpy, visual, colormap, (XftColor *)where);
+  XftColorFree(dpy, visual, colormap, where);
 }
 
 static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
@@ -413,6 +507,9 @@ int default_command_count = DEFAULT_COMMAND_COUNT;
 #define DECLFONT(NAME, DEFAULT, PLACE)					\
   DECLDYNAMIC(NAME, get_cfg_font, free_cfg_font, DEFAULT_##DEFAULT, PLACE)
 
+#define DECLPOSITION(NAME, DEFAULT, PLACE)				\
+  DECLSTATIC(NAME, get_cfg_position, DEFAULT_##DEFAULT, PLACE)
+
 #define DECL_STRUCT cfg
 
 struct resource_spec cfg_resources[] = {
@@ -434,6 +531,7 @@ struct resource_spec cfg_resources[] = {
 #define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
 
 struct resource_spec theme_resources[] = {
+  DECLPOSITION(panel.position, PANEL_POSN, PANEL_POSITION_NAME),
   DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
 	     background_style),
   DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
@@ -474,8 +572,6 @@ struct resource_spec cmd_resources[] = {
 };
 
 #define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
-
-static struct cfg cfg;
 
 struct cfg *get_cfg(Display *dpy)
 {
@@ -561,14 +657,14 @@ void release_cfg(Display *dpy, struct cfg *cfg)
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
       if (spec->free && *(int *)((char *)cfg + spec->allocated))
-	(spec->free)(dpy, (void **)((char *)cfg + spec->offset));
+	(spec->free)(dpy, (void *)((char *)cfg + spec->offset));
     }
 
   spec = theme_resources;
   for (int i = 0; i < NUM_THEME ; i++, spec++)
     {
       if (spec->free && *(int *)((char *)cfg + spec->allocated))
-	(spec->free)(dpy, (void **)((char *)cfg + spec->offset));
+	(spec->free)(dpy, (void *)((char *)cfg + spec->offset));
     }
 
   for (int i = 0; i < cfg->command_count; i++)
@@ -578,13 +674,42 @@ void release_cfg(Display *dpy, struct cfg *cfg)
       for (int j = 0; j < NUM_CMD ; j++, spec++)
 	{
 	  if (spec->free && *(int *)((char *)cmd + spec->allocated))
-	    (spec->free)(dpy, (void **)((char *)cmd + spec->offset));
+	    (spec->free)(dpy, (void *)((char *)cmd + spec->offset));
 	}
       
       free(cmd->action_params);
     }
 
   free(cfg->commands);
+}
+
+void position_to_coord(struct position *posn, int *x, int *y,
+		       int width, int height, struct cfg* cfg, int is_text)
+{
+  *x = posn->x;
+  *y = posn->y;
+  switch (posn->flags & HORIZ_MASK)
+    {
+    case PUT_LEFT:
+      *x -= width;
+      break;
+    case PUT_CENTER:
+      *x -= width >> 2;
+    }
+  if (posn->flags & X_IS_PANEL_COORD)
+    *x += cfg->PANEL_POSITION_NAME.x;
+  switch (posn->flags & VERT_MASK)
+    {
+    case PUT_ABOVE:
+      *y -= height;
+      break;
+    case PUT_CENTER:
+      *y -= height >> 2;
+    }
+  if (is_text)
+    y += height;
+  if (posn->flags & Y_IS_PANEL_COORD)
+    *y += cfg->PANEL_POSITION_NAME.y;
 }
 
 #ifdef TESTING
