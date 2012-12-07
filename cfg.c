@@ -527,7 +527,7 @@ int default_command_count = DEFAULT_COMMAND_COUNT;
 
 #define DECL_STRUCT cfg
 
-struct resource_spec cfg_resources[] = {
+static struct resource_spec cfg_resources[] = {
   DECLSTATIC(ignore-capslock, get_cfg_boolean, &Untrue, ignore_capslock),
   DECLSTATIC(numlock, get_cfg_boolean, &Untrue, numlock),
   DECLSTATIC(hide-mouse, get_cfg_boolean, &Untrue, hide_mouse),
@@ -545,7 +545,7 @@ struct resource_spec cfg_resources[] = {
 
 #define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
 
-struct resource_spec theme_resources[] = {
+static struct resource_spec theme_resources[] = {
   DECLPOSITION(panel.position, PANEL_POSN, PANEL_POSITION_NAME),
   DECLPOSITION(message.position, MESSAGE_POSN, message_position),
   DECLPOSITION(welcome.position, WELCOME_POSN, welcome_position),
@@ -598,7 +598,7 @@ struct resource_spec theme_resources[] = {
 #undef DECL_STRUCT
 #define DECL_STRUCT command
 
-struct resource_spec cmd_resources[] = {
+static struct resource_spec cmd_resources[] = {
   { "shortcut", get_cmd_shortcut, NULL, NULL, 0, 0 },
   DECLSTATIC(delay, get_cfg_count, &Zero, delay),
   DECLSTRING(name, NULL, name),
@@ -607,6 +607,37 @@ struct resource_spec cmd_resources[] = {
 };
 
 #define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
+
+void translate_position(struct position *posn, int width, int height,
+		        struct cfg* cfg, int is_text)
+{
+  if (posn->flags & TRANSLATION_IS_CACHED)
+    return;
+
+  posn->flags |= TRANSLATION_IS_CACHED;
+  switch (posn->flags & HORIZ_MASK)
+    {
+    case PUT_LEFT:
+      posn->x -= width;
+      break;
+    case PUT_CENTER:
+      posn->x -= width / 2;
+    }
+  if (posn->flags & X_IS_PANEL_COORD)
+    posn->x += cfg->PANEL_POSITION_NAME.x;
+  switch (posn->flags & VERT_MASK)
+    {
+    case PUT_ABOVE:
+      posn->y -= height;
+      break;
+    case PUT_CENTER:
+      posn->y -= height / 2;
+    }
+  if (posn->flags & Y_IS_PANEL_COORD)
+    posn->y += cfg->PANEL_POSITION_NAME.y;
+  if (is_text)
+    posn->y += height;
+}
 
 struct cfg *get_cfg(Display *dpy)
 {
@@ -716,37 +747,6 @@ void release_cfg(Display *dpy, struct cfg *cfg)
     }
 
   free(cfg->commands);
-}
-
-void translate_position(struct position *posn, int width, int height,
-		        struct cfg* cfg, int is_text)
-{
-  if (posn->flags & TRANSLATION_IS_CACHED)
-    return;
-
-  posn->flags |= TRANSLATION_IS_CACHED;
-  switch (posn->flags & HORIZ_MASK)
-    {
-    case PUT_LEFT:
-      posn->x -= width;
-      break;
-    case PUT_CENTER:
-      posn->x -= width / 2;
-    }
-  if (posn->flags & X_IS_PANEL_COORD)
-    posn->x += cfg->PANEL_POSITION_NAME.x;
-  switch (posn->flags & VERT_MASK)
-    {
-    case PUT_ABOVE:
-      posn->y -= height;
-      break;
-    case PUT_CENTER:
-      posn->y -= height / 2;
-    }
-  if (posn->flags & Y_IS_PANEL_COORD)
-    posn->y += cfg->PANEL_POSITION_NAME.y;
-  if (is_text)
-    posn->y += height;
 }
 
 #ifdef TESTING
