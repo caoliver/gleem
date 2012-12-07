@@ -197,11 +197,7 @@ void do_stuff()
   dpy = XOpenDisplay(NULL);
   scr = DefaultScreen(dpy);
   rootid = RootWindow(dpy, scr);
-#ifdef ON_ROOT
   wid = rootid;
-#else
-  wid = XCreateSimpleWindow(dpy, rootid, 0, 0, 1024, 768, 0, 0, 0);
-#endif
   pwid = XCreateSimpleWindow(dpy, wid, XOFF, YOFF, 587, 235, 0, 0, 255);
   memset(&bg, 0, sizeof(bg));
   read_image("background.jpg", &bg);
@@ -277,7 +273,6 @@ void do_stuff()
 				       BlackPixel(dpy, DefaultScreen(dpy)));
 		  XClearWindow(dpy, wid);
 		  XSync(dpy, False);
-		  sleep(2);
 		  write(1, "Result: ", 9);
 		  if (outix)
 		    write(1, out, outix);
@@ -310,6 +305,8 @@ void do_stuff()
 
 int main(int argc, char *argv[])
 {
+  if (!strcmp(getenv("DISPLAY"), ":0"))
+    errx(1, "Please use Xephyr");
   do_stuff();
   return 0;
 }

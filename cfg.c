@@ -244,6 +244,8 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
     goto bad_position;							\
   if (*end == '%')							\
     {									\
+      if (pixel_pair)							\
+	goto bad_position;						\
       result_position->flags &= ~FLAG;					\
       result_position->COORD =						\
 	(cfg.screen_specs.DIMEN * scan) / 100 +				\
@@ -253,32 +255,33 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
   else									\
     result_position->COORD = scan; // Needs panel offset added at use.  
 
-static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
-			    void *valptr, void *default_value)
+static int
+get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
+			  void *valptr, void *default_value, int pixel_pair)
 {
-   char *type;
-   long scan;
-   XrmValue value;
-   char *position_string = (char *)default_value;
-   struct position *result_position = valptr;
+  char *type;
+  long scan;
+  XrmValue value;
+  char *position_string = (char *)default_value;
+  struct position *result_position = valptr;
 
-   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-     position_string = value.addr;
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    position_string = value.addr;
 
-   if (!position_string)
-     goto bad_position;
+  if (!position_string)
+    goto bad_position;
 
-   const char *str = position_string;
-   char *end;
-   result_position->flags |= X_IS_PANEL_COORD | Y_IS_PANEL_COORD;
-   SCAN_COORD(x, width, xoffset, X_IS_PANEL_COORD);
-   if (!isspace(*end))
-     goto bad_position;
-   str = end;
-   SCAN_COORD(y, height, yoffset, Y_IS_PANEL_COORD);
+  const char *str = position_string;
+  char *end;
+  result_position->flags |= X_IS_PANEL_COORD | Y_IS_PANEL_COORD;
+  SCAN_COORD(x, width, xoffset, X_IS_PANEL_COORD);
+  if (!isspace(*end))
+    goto bad_position;
+  str = end;
+  SCAN_COORD(y, height, yoffset, Y_IS_PANEL_COORD);
   if (!*end)
     return 1;
-  if (!isspace(*end))
+  if (pixel_pair || !isspace(*end))
     goto bad_position;
 
   str = skip_space(end);
@@ -310,16 +313,26 @@ static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
       str = skip_space(end);
     }
 
-
-
-   return ALLOC_STATIC;
+  return ALLOC_STATIC;
 
  bad_position:
-   LogError(position_string
-	    ? "Bad position for %s: %s\n"
-	    : "No position for %s\n",
-	    name, position_string);
-   exit(UNMANAGE_DISPLAY);
+  LogError(position_string
+	   ? "Bad position for %s: %s\n"
+	   : "No position for %s\n",
+	   name, position_string);
+  exit(UNMANAGE_DISPLAY);
+}
+
+static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
+			    void *valptr, void *default_value)
+{
+  return get_cfg_position_internal(dpy, db, name, valptr, default_value, 0);
+}
+
+static int get_cfg_pixel_pair(Display *dpy, XrmDatabase db, const char *name,
+			      void *valptr, void *default_value)
+{
+  return get_cfg_position_internal(dpy, db, name, valptr, default_value, 1);
 }
 
 static int
@@ -509,6 +522,8 @@ int default_command_count = DEFAULT_COMMAND_COUNT;
 
 #define DECLPOSITION(NAME, DEFAULT, PLACE)				\
   DECLSTATIC(NAME, get_cfg_position, DEFAULT_##DEFAULT, PLACE)
+#define DECLPIXELPAIR(NAME, DEFAULT, PLACE)				\
+  DECLSTATIC(NAME, get_cfg_pixel_pair, DEFAULT_##DEFAULT, PLACE)
 
 #define DECL_STRUCT cfg
 
@@ -532,6 +547,26 @@ struct resource_spec cfg_resources[] = {
 
 struct resource_spec theme_resources[] = {
   DECLPOSITION(panel.position, PANEL_POSN, PANEL_POSITION_NAME),
+  DECLPOSITION(message.position, MESSAGE_POSN, message_position),
+  DECLPOSITION(welcome.position, WELCOME_POSN, welcome_position),
+  DECLPOSITION(password.prompt.position, PASS_PROMPT_POSN,
+	       password_prompt_position),
+  DECLPOSITION(password.input.position, PASS_INPUT_POSN,
+	       password_input_position),
+  DECLPOSITION(username.prompt.position, USER_PROMPT_POSN,
+	       username_prompt_position),
+  DECLPOSITION(username.input.position, USER_INPUT_POSN,
+	       username_input_position),
+  DECLPIXELPAIR(message.shadow.offset, MESSAGE_SHADOW_OFFSET,
+		message_shadow_offset),
+  DECLPIXELPAIR(welcome.shadow.offset, WELCOME_SHADOW_OFFSET,
+		welcome_shadow_offset),
+  DECLPIXELPAIR(password.prompt.shadow.offset, PASS_PROMPT_SHADOW_OFFSET,
+		pass_prompt_shadow_offset),
+  DECLPIXELPAIR(username.prompt.shadow.offset, USER_PROMPT_SHADOW_OFFSET,
+		user_prompt_shadow_offset),
+  DECLPIXELPAIR(password.input.size, PASS_INPUT_SIZE, password_input_size),
+  DECLPIXELPAIR(username.input.size, USER_INPUT_SIZE, username_input_size),
   DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
 	     background_style),
   DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,

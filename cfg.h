@@ -46,6 +46,12 @@ struct cfg {
   struct command *commands;
   char *current_session;  // Pointer into session string.
   struct position PANEL_POSITION_NAME;
+  struct position message_position, welcome_position;
+  struct position message_shadow_offset, welcome_shadow_offset;
+  struct position password_prompt_position, username_prompt_position;
+  struct position pass_prompt_shadow_offset, user_prompt_shadow_offset;
+  struct position password_input_position, username_input_position;
+  struct position password_input_size, username_input_size;
   ADD_ALLOC_FLAG(XftColor, background_color);
   ADD_ALLOC_FLAG(XftColor, message_color);
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);
