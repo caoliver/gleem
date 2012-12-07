@@ -8,6 +8,7 @@
 #include <poll.h>
 
 #include "image.h"
+#include "cfg.h"
 
 enum placement {placement_left, placement_center, placement_right};
 
@@ -190,15 +191,17 @@ void do_stuff()
   Window wid, pwid, rootid;
   struct image bg, pan;
   Pixmap pixmap;
-
-#define XOFF 50
-#define YOFF 500
+  struct cfg *cfg;
 
   dpy = XOpenDisplay(NULL);
+  cfg = get_cfg(dpy);
   scr = DefaultScreen(dpy);
   rootid = RootWindow(dpy, scr);
   wid = rootid;
-  pwid = XCreateSimpleWindow(dpy, wid, XOFF, YOFF, 587, 235, 0, 0, 255);
+
+  read_image("panel.png", &pan);
+  pwid = XCreateSimpleWindow(dpy, wid, POSITION_TO_XY(cfg->panel_position),
+			     pan.width, pan.height, 0, 0, 255);
   memset(&bg, 0, sizeof(bg));
   read_image("background.jpg", &bg);
   resize_background(&bg, 1024, 768);
@@ -207,8 +210,7 @@ void do_stuff()
   XFreePixmap(dpy, pixmap);
   XClearWindow(dpy,wid);
 
-  read_image("panel.png", &pan);
-  merge_with_background(&pan, &bg, XOFF, YOFF);
+  merge_with_background(&pan, &bg, POSITION_TO_XY(cfg->panel_position));
   free_image_buffers(&bg);
   pixmap = imageToPixmap(dpy, &pan, scr, pwid);
   free_image_buffers(&pan);
@@ -233,6 +235,7 @@ void do_stuff()
   int again = 1;
   char out[128]="";
   int outix = 0;
+  show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
   while  (again)
     if(XPending(dpy) || poll(&pfd, 1, -1) > 0)
       while(XPending(dpy))
@@ -250,7 +253,9 @@ void do_stuff()
 	    {
 	    case Expose:
 	      test_tp(dpy, wid, msg, XROOT, YROOT, 0);
-	      test_tp(dpy, pwid, msg, XROOT-XOFF, YROOT-YOFF, 0);
+	      test_tp(dpy, pwid, msg,
+		      POSITION_TO_XY_OFFSET(cfg->panel_position, XROOT, YROOT),
+		      0);
 
 	      show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
 	      break;

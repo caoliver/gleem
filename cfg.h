@@ -23,8 +23,10 @@ struct position {
     translate_position(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)
 
 #define POSITION_TO_XY(POSITION) (POSITION).x, (POSITION).y
+#define POSITION_TO_XY_OFFSET(POSITION, X, Y)	\
+  (POSITION).x + (X), (POSITION).y + (Y)
 
-#define PANEL_POSITION_NAME panel_coords
+#define PANEL_POSITION_NAME panel_position
 
 struct command {
   int action;  // Keyword whitespace [optional params]

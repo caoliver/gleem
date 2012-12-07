@@ -645,10 +645,8 @@ struct cfg *get_cfg(Display *dpy)
   char *theme_directory, *themes;
   static char name[48];
 
-#ifdef TESTING
-  if (!(db = XrmGetFileDatabase("gleem.conf")))
-    abort();
-#endif
+  char *RMString = XResourceManagerString(dpy);
+  db = XrmGetStringDatabase(RMString ? RMString : "");
 
   memset(&cfg, 0, sizeof(cfg));
   strcpy(name, MAIN_PREFIX);
@@ -708,10 +706,6 @@ struct cfg *get_cfg(Display *dpy)
 	*(int *)((char *)&cfg + spec->allocated) = 1;      
     }
 
-#if defined(TESTING) && defined(BREAK)
-  __asm__("int3");
-#endif
-
   free(theme_directory);
   free(themes);
   return &cfg;
@@ -748,22 +742,3 @@ void release_cfg(Display *dpy, struct cfg *cfg)
 
   free(cfg->commands);
 }
-
-#ifdef TESTING
-int main(int argc, char *argv[])
-{
-  Display *dpy;
-  struct position pn = { 100, 100, X_IS_PANEL_COORD | Y_IS_PANEL_COORD };
-
-  struct cfg *cfg = get_cfg(dpy = XOpenDisplay(NULL));
-
-  printf("Old coords are: %d %d\n", POSITION_TO_XY(pn));
-  TRANSLATE_POSITION(&pn, 50, 50, cfg, 0);
-  printf("New coords are: %d %d\n", POSITION_TO_XY(pn));
-
-  release_cfg(dpy, cfg);
-  XCloseDisplay(dpy);
-
-  return 0;
-}
-#endif
