@@ -25,8 +25,8 @@
 #define DEFAULT_USER_FONT "Verdana:size=14:dpi=75"
 #define DEFAULT_PASS_FONT "Verdana:size=14:dpi=75"
 
-#define DEFAULT_USER_PROMPT "Username: "
-#define DEFAULT_PASS_PROMPT "Password: "
+#define DEFAULT_USER_PROMPT "Username:"
+#define DEFAULT_PASS_PROMPT "Password:"
 
 #define DEFAULT_PANEL_POSN "50% 50% center"
 #define DEFAULT_MESSAGE_POSN "50% 30% center"

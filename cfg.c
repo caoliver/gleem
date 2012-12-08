@@ -238,7 +238,7 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
   return ALLOC_STATIC;
 }
 
-#define SCAN_COORD(COORD, DIMEN, OFFSET, FLAG)				\
+#define SCAN_COORD(COORD, DIMEN, FLAG)					\
   scan = strtol(str, &end, 10);						\
   if (str == end)							\
     goto bad_position;							\
@@ -248,8 +248,7 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
 	goto bad_position;						\
       result_position->flags &= ~FLAG;					\
       result_position->COORD =						\
-	(cfg.screen_specs.DIMEN * scan) / 100 +				\
-	cfg.screen_specs.OFFSET;					\
+	(cfg.screen_specs.DIMEN * scan) / 100;				\
       end++;								\
     }									\
   else									\
@@ -274,11 +273,11 @@ get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
   const char *str = position_string;
   char *end;
   result_position->flags |= X_IS_PANEL_COORD | Y_IS_PANEL_COORD;
-  SCAN_COORD(x, width, xoffset, X_IS_PANEL_COORD);
+  SCAN_COORD(x, width, X_IS_PANEL_COORD);
   if (!isspace(*end))
     goto bad_position;
   str = end;
-  SCAN_COORD(y, height, yoffset, Y_IS_PANEL_COORD);
+  SCAN_COORD(y, height, Y_IS_PANEL_COORD);
   if (!*end)
     return 1;
   if (pixel_pair || !isspace(*end))

@@ -86,7 +86,6 @@ void test_tp(Display *dpy, Window win, char *str, int x, int y, int clear)
   XftColorAllocName(dpy, visual, colormap, "#f9f9f9", &tp.color);
   XftColorAllocName(dpy, visual, colormap, "#702342", &tp.shadow_color);
   tp.shadow_yoff = tp.shadow_xoff = 1;
-  printf("draw text at %d %d\n", x, y);
   text_op(dpy, win, scr, str, x, y, placement_right, &tp, !clear);
 }
 
@@ -198,34 +197,31 @@ void do_stuff()
   cfg = get_cfg(dpy);
   scr = DefaultScreen(dpy);
   rootid = RootWindow(dpy, scr);
-  wid = rootid;
-
+  XSetWindowBackground(dpy, rootid, BlackPixel(dpy, DefaultScreen(dpy)));
+  XClearWindow(dpy, rootid);
+  wid = XCreateSimpleWindow(dpy, rootid,
+			    cfg->screen_specs.xoffset,
+			    cfg->screen_specs.yoffset,
+			    cfg->screen_specs.width,
+			    cfg->screen_specs.height,
+			    0, 0, 255);
   read_image("panel.png", &pan);
   pwid = XCreateSimpleWindow(dpy, wid, POSITION_TO_XY(cfg->panel_position),
 			     pan.width, pan.height, 0, 0, 255);
   memset(&bg, 0, sizeof(bg));
   read_image("background.jpg", &bg);
-  //  resize_background(&bg, cfg->screen_specs.width, cfg->screen_specs.height);
-  resize_background(&bg, 1024, 768);
-  printf("Offset is %d %d\n",
-	 cfg->screen_specs.xoffset,
-	 cfg->screen_specs.yoffset);
-  /* frame_background(&bg, */
-  /* 		   cfg->screen_specs.total_width, */
-  /* 		   cfg->screen_specs.total_height, */
-  /* 		   cfg->screen_specs.xoffset, */
-  /* 		   cfg->screen_specs.yoffset, */
-  /* 		   &cfg->background_color); */
+  resize_background(&bg, cfg->screen_specs.width, cfg->screen_specs.height);
   merge_with_background(&pan, &bg, POSITION_TO_XY(cfg->panel_position));
   pixmap = imageToPixmap(dpy, &bg, scr, wid);
   XSetWindowBackgroundPixmap(dpy, wid, pixmap);
+  XClearWindow(dpy, wid);
   XFreePixmap(dpy, pixmap);
-  XClearWindow(dpy,wid);
 
   free_image_buffers(&bg);
   pixmap = imageToPixmap(dpy, &pan, scr, pwid);
   free_image_buffers(&pan);
   XSetWindowBackgroundPixmap(dpy, pwid, pixmap);
+  XClearWindow(dpy, pwid);
   XFreePixmap(dpy, pixmap);
 
   XMapWindow(dpy, pwid);
@@ -236,9 +232,7 @@ void do_stuff()
   struct pollfd pfd = {0};
   pfd.fd = ConnectionNumber(dpy);
   pfd.events = POLLIN;
-#ifdef ON_ROOT
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
-#endif
   //  char *msg = "Hello, world!";
   char *msg = "I'm going to put a very long string on the screen.  Tra la la la la!!!!!";
   char mask = '*';
@@ -287,10 +281,8 @@ void do_stuff()
 		case XK_Return:
 		case XK_Tab:
 		case XK_KP_Enter:
-		  XDestroyWindow(dpy, pwid);
-		  XSetWindowBackground(dpy, wid,
-				       BlackPixel(dpy, DefaultScreen(dpy)));
-		  XClearWindow(dpy, wid);
+		  XDestroyWindow(dpy, wid);
+		  XClearWindow(dpy, rootid);
 		  XSync(dpy, False);
 		  write(1, "Result: ", 9);
 		  if (outix)

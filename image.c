@@ -326,7 +326,7 @@ void merge_with_background(struct image *panel, struct image *background,
       int v_start = MAX(0, yoffset);
       int v_end = MIN(background->height, panel->height + yoffset);
       
-      if (h_end <= h_start && v_end <= v_start)
+      if (h_end <= h_start || v_end <= v_start)
 	return;
 
       int num_cols = h_end - h_start;
