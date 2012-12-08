@@ -86,6 +86,7 @@ void test_tp(Display *dpy, Window win, char *str, int x, int y, int clear)
   XftColorAllocName(dpy, visual, colormap, "#f9f9f9", &tp.color);
   XftColorAllocName(dpy, visual, colormap, "#702342", &tp.shadow_color);
   tp.shadow_yoff = tp.shadow_xoff = 1;
+  printf("draw text at %d %d\n", x, y);
   text_op(dpy, win, scr, str, x, y, placement_right, &tp, !clear);
 }
 
@@ -204,13 +205,23 @@ void do_stuff()
 			     pan.width, pan.height, 0, 0, 255);
   memset(&bg, 0, sizeof(bg));
   read_image("background.jpg", &bg);
+  //  resize_background(&bg, cfg->screen_specs.width, cfg->screen_specs.height);
   resize_background(&bg, 1024, 768);
+  printf("Offset is %d %d\n",
+	 cfg->screen_specs.xoffset,
+	 cfg->screen_specs.yoffset);
+  /* frame_background(&bg, */
+  /* 		   cfg->screen_specs.total_width, */
+  /* 		   cfg->screen_specs.total_height, */
+  /* 		   cfg->screen_specs.xoffset, */
+  /* 		   cfg->screen_specs.yoffset, */
+  /* 		   &cfg->background_color); */
+  merge_with_background(&pan, &bg, POSITION_TO_XY(cfg->panel_position));
   pixmap = imageToPixmap(dpy, &bg, scr, wid);
   XSetWindowBackgroundPixmap(dpy, wid, pixmap);
   XFreePixmap(dpy, pixmap);
   XClearWindow(dpy,wid);
 
-  merge_with_background(&pan, &bg, POSITION_TO_XY(cfg->panel_position));
   free_image_buffers(&bg);
   pixmap = imageToPixmap(dpy, &pan, scr, pwid);
   free_image_buffers(&pan);
@@ -235,6 +246,12 @@ void do_stuff()
   int again = 1;
   char out[128]="";
   int outix = 0;
+#define XROOT -50
+#define YROOT 50
+  test_tp(dpy, pwid, msg, XROOT, YROOT, 0);
+  test_tp(dpy, wid, msg,
+	  POSITION_TO_XY_OFFSET(cfg->panel_position, XROOT, YROOT),
+	  0);
   show_input_at(dpy, scr, pwid, out, 389, 188, 193, 24, 1, mask);
   while  (again)
     if(XPending(dpy) || poll(&pfd, 1, -1) > 0)
@@ -245,15 +262,13 @@ void do_stuff()
 	  XComposeStatus compstatus;
 	  char ascii;
 
-#define XROOT 0
-#define YROOT 600
 
 	  XNextEvent(dpy, &event);
 	  switch(event.type)
 	    {
 	    case Expose:
-	      test_tp(dpy, wid, msg, XROOT, YROOT, 0);
-	      test_tp(dpy, pwid, msg,
+	      test_tp(dpy, pwid, msg, XROOT, YROOT, 0);
+	      test_tp(dpy, wid, msg,
 		      POSITION_TO_XY_OFFSET(cfg->panel_position, XROOT, YROOT),
 		      0);
 
@@ -272,7 +287,6 @@ void do_stuff()
 		case XK_Return:
 		case XK_Tab:
 		case XK_KP_Enter:
-		  test_tp(dpy, wid, msg, XROOT, YROOT, 1);
 		  XDestroyWindow(dpy, pwid);
 		  XSetWindowBackground(dpy, wid,
 				       BlackPixel(dpy, DefaultScreen(dpy)));

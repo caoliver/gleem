@@ -313,29 +313,47 @@ void resize_background(struct image *image, const int w, const int h)
   image->area = new_area;
 }
 
+#define MAX(A,B) (A < B) ? B : A;
+#define MIN(A,B) (A > B) ? B : A;
 
 void merge_with_background(struct image *panel, struct image *background,
 			   unsigned int xoffset, unsigned int yoffset)
 {
-  // Do nothing if panel isn't entirely contained within background.
-  if (panel->width + xoffset > background->width
-      || panel->height + yoffset > background->height)
-    return;
-
   if (panel->alpha_data)
     {
-      unsigned char *src =
-	background->rgb_data + 3 * (yoffset * background->width + xoffset);
-      unsigned char *dst = panel->rgb_data;
-      unsigned char *alpha = panel->alpha_data;
- 
-      for (int i = panel->height; i--; src += 3 * background->width)
+      int h_start = MAX(0, xoffset);
+      int h_end = MIN(background->width, panel->width + xoffset);
+      int v_start = MAX(0, yoffset);
+      int v_end = MIN(background->height, panel->height + yoffset);
+      
+      if (h_end <= h_start && v_end <= v_start)
+	return;
+
+      int num_cols = h_end - h_start;
+      int rows = v_end - v_start;
+
+      int panel_start =
+	panel->width * (v_start - yoffset) + h_start - xoffset;
+      unsigned char *rowalpha =	panel->alpha_data + panel_start;
+      unsigned char *rowdst = panel->rgb_data + 3 * panel_start;
+      unsigned char *rowsrc =
+	background->rgb_data + 3 * (background->width * v_start + h_start);
+
+      while (rows--)
 	{
-	  unsigned char *src_ptr = src;
-	  
-	  for (int j = panel->width; j--; alpha++)
-	    for (int k = 3; k--; dst++)
-	      *dst = (*dst * *alpha + *src_ptr++ * (255 - *alpha)) >> 8;
+	  unsigned char *dst = rowdst, *src = rowsrc, *alpha = rowalpha;
+	  int cols = num_cols;
+
+	  while (cols--)
+	    {
+	      for (int k = 3; k--; dst++)
+		*dst = (*dst * *alpha + *src++ * (255 - *alpha)) >> 8;
+	      alpha++;
+	    }
+
+	  rowdst += 3 * panel->width;
+	  rowalpha += panel->width;
+	  rowsrc += 3 * background->width;
 	}
     }
 }
@@ -345,50 +363,37 @@ void frame_background(struct image *image,
 		      unsigned int width, unsigned int height,
 		      int xoffset, int yoffset, XftColor *color)
 {
+  int area = width * height;
   unsigned char
     r = color->color.red >> 8,
     g = color->color.green >> 8,
     b = color->color.blue >> 8;
-  unsigned char *new_rgb = xmalloc(3 * width * height);
+  unsigned char *new_rgb = xmalloc(3 * area);
 
   unsigned char *dst = new_rgb;
-  for (int i = width * height; i--;)
+  for (int i = area; i--;)
     {
       *dst++ = r;
       *dst++ = g;
       *dst++ = b;
     }
 
-  if (xoffset < (int)width &&
-      yoffset < (int)height &&
-      image->width >= - xoffset &&
-      image->height >= - yoffset)
+  int h_start = MAX(0, xoffset);
+  int h_end = MIN(width, image->width + xoffset);
+  int v_start = MAX(0, yoffset);
+  int v_end = MIN(height, image->height + yoffset);
+  if (h_end > h_start && v_end > v_start)
     {
-      unsigned char
-	*dst =
-	new_rgb + 3 * ((yoffset < 0 ? 0 : width * yoffset) +
-		       (xoffset < 0 ? 0 : xoffset)),
-
-	*src =
-	image->rgb_data - 3 * ((yoffset < 0 ? yoffset * image->width : 0) +
-			       (xoffset < 0 ? xoffset : 0));
-
-      int
-	rows = height > image->height + yoffset
-	? image->height + yoffset
-	: height - yoffset < height
-	? height - yoffset
-	: height,
-
-	cols = width > image->width + xoffset
-	? image->width + xoffset
-	: width - xoffset < width
-	? width - xoffset
-	: width;
+      int cols = h_end - h_start;
+      int rows = v_end - v_start;
+      unsigned char *dst = new_rgb + 3 * (width * v_start + h_start);
+      unsigned char *src =
+	image->rgb_data + 3 * (image->width * (v_start - yoffset) +
+			       h_start - xoffset);
 
       while (rows--)
 	{
-      	  memcpy(dst, src, 3*cols);
+	  memcpy(dst, src, 3*cols);
 	  dst += 3 * width;
 	  src += 3 * image->width;
 	}
@@ -399,7 +404,7 @@ void frame_background(struct image *image,
   image->rgb_data = new_rgb;
   image->width = width;
   image->height = height;
-  image->area = width * height;
+  image->area = area;
 }
 
 
