@@ -1,7 +1,7 @@
 #ifndef _CFG_H_
 #define _CFG_H_
 
-#define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
+#define THEME_FILE_NAME "theme.defn"
 
 struct screen_specs {
   unsigned int xoffset;
@@ -22,11 +22,17 @@ struct position {
   if (!((POSITION)->flags & TRANSLATION_IS_CACHED))			\
     translate_position(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)
 
-#define POSITION_TO_XY(POSITION) (POSITION).x, (POSITION).y
-#define POSITION_TO_XY_OFFSET(POSITION, X, Y)	\
-  (POSITION).x + (X), (POSITION).y + (Y)
+
+#define XY(X,Y) X,Y
+#define TO_XY(POSITION) (POSITION).x, (POSITION).y
+#define OFFSET_XY_HELPER(X,Y,XDELTA,YDELTA) X+XDELTA,Y+YDELTA
+#define OFFSET_XY(A,B) OFFSET_XY_HELPER(A,B)
+#define NEGATE_XY_HELPER(X,Y) -X,-Y
+#define NEGATE_XY(ARG) NEGATE_XY_HELPER(ARG)
 
 #define PANEL_POSITION_NAME panel_position
+
+#define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
 
 struct command {
   int action;  // Keyword whitespace [optional params]
@@ -40,6 +46,7 @@ struct command {
 };
 
 struct cfg {
+  struct image background_image, panel_image;
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
   int message_duration, command_count;
   struct screen_specs screen_specs;
@@ -52,9 +59,11 @@ struct cfg {
   struct position message_shadow_offset, welcome_shadow_offset;
   struct position password_prompt_position, username_prompt_position;
   struct position pass_prompt_shadow_offset, user_prompt_shadow_offset;
+  struct position input_shadow_offset;
   struct position password_input_position, username_input_position;
   struct position password_input_size, username_input_size;
   ADD_ALLOC_FLAG(XftColor, background_color);
+  ADD_ALLOC_FLAG(XftColor, panel_color);
   ADD_ALLOC_FLAG(XftColor, message_color);
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);
   ADD_ALLOC_FLAG(XftColor, welcome_color);
@@ -76,6 +85,8 @@ struct cfg {
   ADD_ALLOC_FLAG(char *, sessions);
   ADD_ALLOC_FLAG(char *, username_prompt);
   ADD_ALLOC_FLAG(char *, password_prompt);
+  ADD_ALLOC_FLAG(char *, background_filename);
+  ADD_ALLOC_FLAG(char *, panel_filename);
 };
 
 
@@ -83,5 +94,7 @@ struct cfg *get_cfg(Display *dpy);
 void release_cfg(Display *dpy, struct cfg *cfg);
 void position_to_coord(struct position *posn, int width, int height,
 		       struct cfg* cfg, int is_text);
+void translate_position(struct position *posn, int width, int height,
+                        struct cfg* cfg, int is_text);
 
 #endif /* _CFG_H_ */

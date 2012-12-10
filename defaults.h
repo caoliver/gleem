@@ -1,12 +1,19 @@
 #ifndef _DEFAULTS_H_
 #define _DEFAULTS_H_
 
-#define DEFAULT_WELCOME_MESSAGE "Welcome to %host"
+#define DEFAULT_INSET 100
+
 #define DEFAULT_MESSAGE_DURATION 3
 #define DEFAULT_COMMAND_COUNT 16
 
+#define DEFAULT_WELCOME_MESSAGE "Welcome to ~h"
+#define DEFAULT_USER_PROMPT "Username:"
+#define DEFAULT_PASS_PROMPT "Password:"
+#define DEFAULT_PASS_MASK " "
+
 #define DEFAULT_BKGND_STYLE "color"
 #define DEFAULT_BKGND_COLOR "black"
+#define DEFAULT_PANEL_COLOR "gray30"
 #define DEFAULT_MESSAGE_COLOR "white"
 #define DEFAULT_MESSAGE_SHADOW_COLOR "gray"
 #define DEFAULT_WELCOME_COLOR "white"
@@ -17,32 +24,29 @@
 #define DEFAULT_PASS_SHADOW_COLOR "gray"
 #define DEFAULT_INPUT_COLOR "DeepSkyBlue4"
 #define DEFAULT_INPUT_ALTERNATE_COLOR "RoyalBlue4"
-#define DEFAULT_INPUT_SHADOW_COLOR "grey25"
+#define DEFAULT_INPUT_SHADOW_COLOR "black"
 
-#define DEFAULT_MESSAGE_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_WELCOME_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_INPUT_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_USER_FONT "Verdana:size=14:dpi=75"
-#define DEFAULT_PASS_FONT "Verdana:size=14:dpi=75"
-
-#define DEFAULT_USER_PROMPT "Username:"
-#define DEFAULT_PASS_PROMPT "Password:"
+#define DEFAULT_MESSAGE_FONT "Verdana:size=18:dpi=75"
+#define DEFAULT_WELCOME_FONT "Verdana:size=18:dpi=75"
+#define DEFAULT_INPUT_FONT "Verdana:size=18:dpi=75"
+#define DEFAULT_USER_FONT "Verdana:size=18:dpi=75"
+#define DEFAULT_PASS_FONT "Verdana:size=18:dpi=75"
 
 #define DEFAULT_PANEL_POSN "50% 50% center"
+#define DEFAULT_PANEL_WIDTH 600
+#define DEFAULT_PANEL_HEIGHT 300
 #define DEFAULT_MESSAGE_POSN "50% 30% center"
-#define DEFAULT_WELCOME_POSN "50% %40 center"
-#define DEFAULT_PASS_PROMPT_POSN "20 55% right"
-#define DEFAULT_PASS_INPUT_POSN "20 55% left"
-#define DEFAULT_USER_PROMPT_POSN "20 55% right"
-#define DEFAULT_USER_INPUT_POSN "20 55% left"
+#define DEFAULT_WELCOME_POSN "50% 40% center"
+#define DEFAULT_PASS_PROMPT_POSN "140 200 left"
+#define DEFAULT_PASS_INPUT_POSN "160 210 right"
+#define DEFAULT_USER_PROMPT_POSN "140 200 left"
+#define DEFAULT_USER_INPUT_POSN "160 210 right"
 #define DEFAULT_MESSAGE_SHADOW_OFFSET "0 0"
 #define DEFAULT_WELCOME_SHADOW_OFFSET "0 0"
 #define DEFAULT_PASS_PROMPT_SHADOW_OFFSET "0 0"
 #define DEFAULT_USER_PROMPT_SHADOW_OFFSET "0 0"
-#define DEFAULT_PASS_INPUT_SIZE "200 24"
-#define DEFAULT_USER_INPUT_SIZE "200 24"
-
-
-#define DEFAULT_PASS_MASK "*"
+#define DEFAULT_PASS_INPUT_SIZE "250 24"
+#define DEFAULT_USER_INPUT_SIZE "250 24"
+#define DEFAULT_INPUT_SHADOW_OFFSET "1 1"
 
 #endif /* _DEFAULTS_H_ */

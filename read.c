@@ -1,6 +1,7 @@
 /****************************************************************************
-    png.c - read and write png images using libpng routines.
-    Distributed with Xplanet.
+    read.c - read and write jpeg and png images routines.
+
+    Copyright (C) 2012 Christopher Oliver <current-input-port@gmail.com>
     Copyright (C) 2002 Hari Nair <hari@alumni.caltech.edu>
 
     This program is free software; you can redistribute it and/or modify
@@ -20,9 +21,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <jpeglib.h>
 #include <png.h>
 #include "read.h"
 #include "util.h"
+
 
 int
 read_png(FILE *infile, const char *filename, int *width, int *height,
@@ -32,7 +36,7 @@ read_png(FILE *infile, const char *filename, int *width, int *height,
 
   png_structp png_ptr;
   png_infop info_ptr;
-  png_bytepp row_pointers;
+  volatile png_bytepp row_pointers = NULL;
   png_uint_32 w, h;
   int bit_depth, color_type, interlace_type;
 
@@ -41,7 +45,7 @@ read_png(FILE *infile, const char *filename, int *width, int *height,
 					 (png_error_ptr) NULL,
 					 (png_error_ptr) NULL))
       || !(info_ptr = png_create_info_struct(png_ptr)))
-    abort();
+    out_of_memory();
 
 #if PNG_LIBPNG_VER_MAJOR>1 || (PNG_LIBPNG_VER_MAJOR==1 && PNG_LIBPNG_VER_MINOR>=4)
   if (setjmp(png_jmpbuf((png_ptr))))
@@ -53,8 +57,9 @@ read_png(FILE *infile, const char *filename, int *width, int *height,
   png_init_io(png_ptr, infile);
   png_read_info(png_ptr, info_ptr);
 
-  png_get_IHDR(png_ptr, info_ptr, &w, &h, &bit_depth, &color_type,
-	       &interlace_type, (int *) NULL, (int *) NULL);
+  if (!png_get_IHDR(png_ptr, info_ptr, &w, &h, &bit_depth, &color_type,
+		    &interlace_type, (int *) NULL, (int *) NULL))
+    goto bugout;
 
   /* Protect against integer overflow */
   if (w >= MAX_DIMENSION || h >= MAX_DIMENSION)
@@ -84,7 +89,7 @@ read_png(FILE *infile, const char *filename, int *width, int *height,
 
   png_set_packing(png_ptr);
 
-  row_pointers = xmalloc(*height * sizeof(png_bytep));
+  row_pointers = xcalloc(*height, sizeof(png_bytep));
 
   for (int i = 0; i < *height; i++)
     row_pointers[i] = xmalloc((*alpha ? 4 : 3) * *width);
@@ -117,11 +122,86 @@ read_png(FILE *infile, const char *filename, int *width, int *height,
 
   ret = 1;
 
-  for (int i = 0; i < *height; i++)
-    free(row_pointers[i]);
+ bugout:
+  if (row_pointers)
+    for (int i = 0; i < *height; i++)
+      free(row_pointers[i]);
   free(row_pointers);
 
- bugout:
   png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp) NULL);
+  return (ret);
+}
+
+
+static jmp_buf jpeg_panic;
+
+void jpeg_panic_handler(j_common_ptr cinfo)
+{
+  longjmp(jpeg_panic, 1);
+}
+
+int
+read_jpeg(FILE *infile, const char *filename, int *width, int *height,
+	  unsigned char **rgb, unsigned char **alpha)
+{
+  int ret = 0;
+  struct jpeg_decompress_struct cinfo;
+  struct jpeg_error_mgr jerr;
+  volatile unsigned char *new_rgb = NULL;
+
+  *alpha = NULL;
+
+  cinfo.err = jpeg_std_error(&jerr);
+  jerr.error_exit = jpeg_panic_handler;
+  if (setjmp(jpeg_panic))
+    {
+      free((unsigned char *)new_rgb);
+      goto bugout;
+    }
+
+  jpeg_create_decompress(&cinfo);
+  jpeg_stdio_src(&cinfo, infile);
+  jpeg_read_header(&cinfo, TRUE);
+  jpeg_start_decompress(&cinfo);
+
+  /* Prevent against integer overflow */
+  if (cinfo.output_width >= MAX_DIMENSION
+      || cinfo.output_height >= MAX_DIMENSION)
+    {
+      fprintf(stderr, "Unreasonable dimension found in image file %s\n",
+	      filename);
+      goto bugout;
+    }
+
+  *width = cinfo.output_width;
+  *height = cinfo.output_height;
+
+  new_rgb = xmalloc(3 * cinfo.output_width * cinfo.output_height);
+
+  unsigned char *ptr = (unsigned char *)new_rgb;
+  if (cinfo.output_components == 3)
+    while (cinfo.output_scanline < cinfo.output_height)
+      {
+	jpeg_read_scanlines(&cinfo, &ptr, 1);
+	ptr += 3 * cinfo.output_width;
+      }
+  else if (cinfo.output_components == 1)
+    while (cinfo.output_scanline < cinfo.output_height)
+      {
+	unsigned char *src = ptr + 2 * cinfo.output_width;
+
+	jpeg_read_scanlines(&cinfo, &src, 1);
+	for (int i = cinfo.output_width; i--; ptr += 3, src++)
+	  memset(ptr, *src, 3);
+      }
+
+  jpeg_finish_decompress(&cinfo);
+  *rgb = (unsigned char *)new_rgb;
+  ret = 1;
+ 
+ bugout:
+
+  jpeg_destroy_decompress(&cinfo);
+
   return (ret);
 }

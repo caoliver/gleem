@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdlib.h>
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
@@ -8,8 +9,9 @@
 #include <ctype.h>
 #include "util.h"
 #include "keywords.h"
-#include "cfg.h"
+#include "image.h"
 #include "defaults.h"
+#include "cfg.h"
 
 #if __STDC_VERSION__ >= 199901L
 #define INLINE_DECL inline
@@ -27,6 +29,7 @@
 
 #define ALLOC_STATIC 0
 #define ALLOC_DYNAMIC 1
+#define GET_CFG_FAIL -1
 
 #define MAIN_PREFIX "gleem."
 #define COMMAND_PREFIX MAIN_PREFIX "command."
@@ -85,7 +88,7 @@ static int get_cfg_boolean(Display *dpy, XrmDatabase db, const char *name,
 	break;
       default:
 	LogError("Invalid boolean resource %s for %s\n", value.addr, name);
-	exit(UNMANAGE_DISPLAY);
+	return GET_CFG_FAIL;
       }
   else
     *(int *)valptr = *(int *)default_value;
@@ -112,7 +115,7 @@ static int get_cfg_count(Display *dpy, XrmDatabase db, const char *name,
     return ALLOC_STATIC;
 
   LogError("Invalid count resource %s for %s\n", value.addr, name);
-  exit(UNMANAGE_DISPLAY);
+  return GET_CFG_FAIL;
 }
 
 static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
@@ -197,11 +200,14 @@ static int get_cfg_char(Display *dpy, XrmDatabase db, const char *name,
 
   if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
     {
-      *(char *)valptr = **(char **)default_value;
+      *(char *)valptr = *(char *)default_value;
       return ALLOC_STATIC;
     }
 
-  *(char *)valptr = value.addr[1];
+  if (value.size > 2)
+    return GET_CFG_FAIL;
+
+  *(char *)valptr = value.addr[0];
   return ALLOC_STATIC;
 }
 
@@ -232,7 +238,7 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
       break;
     default:
       LogError("Invalid background style %s\n", style_name);
-      exit(UNMANAGE_DISPLAY);
+      return GET_CFG_FAIL;
     }
 
   return ALLOC_STATIC;
@@ -279,7 +285,7 @@ get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
   str = end;
   SCAN_COORD(y, height, Y_IS_PANEL_COORD);
   if (!*end)
-    return 1;
+    return ALLOC_STATIC;
   if (pixel_pair || !isspace(*end))
     goto bad_position;
 
@@ -297,6 +303,7 @@ get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
 	{
 	case KEYWORD_C:
 	  key_num = KEYWORD_CENTER;
+	case KEYWORD_CENTER:
 	case KEYWORD_LEFT:
 	case KEYWORD_RIGHT:
 	case KEYWORD_ABOVE:
@@ -319,7 +326,7 @@ get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
 	   ? "Bad position for %s: %s\n"
 	   : "No position for %s\n",
 	   name, position_string);
-  exit(UNMANAGE_DISPLAY);
+  return GET_CFG_FAIL;
 }
 
 static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
@@ -377,7 +384,7 @@ get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
 	  break;
 	default:
 	  LogError("Bad modifier in %s: context = %s\n", name, str);
-	  exit(UNMANAGE_DISPLAY);
+	  return GET_CFG_FAIL;
 	}
 
       str = skip_space(end);
@@ -401,7 +408,7 @@ get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
     }
 
   LogError("Bad key symbol in %s: context = %s\n", name, str);
-  exit(UNMANAGE_DISPLAY);
+  return GET_CFG_FAIL;
 }
 
 static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
@@ -419,7 +426,7 @@ static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
     return ALLOC_DYNAMIC;
 
   LogError("Can't open font %s\n", font_name);
-  exit(UNMANAGE_DISPLAY);
+  return GET_CFG_FAIL;
 }
 
 static void free_cfg_font(Display *dpy, void *where)
@@ -445,7 +452,7 @@ static int get_cfg_color(Display *dpy, XrmDatabase db, const char *name,
     return ALLOC_DYNAMIC;
 
   LogError("Ran out of colors\n");
-  exit(RESERVER_DISPLAY);
+  return GET_CFG_FAIL;
 }
 
 static void free_cfg_color(Display *dpy, void *where)
@@ -457,7 +464,7 @@ static void free_cfg_color(Display *dpy, void *where)
   XftColorFree(dpy, visual, colormap, where);
 }
 
-static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
+static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 {
   char *type;
   XrmValue value;
@@ -466,7 +473,7 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
   if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
     {
       cmd->action = 0;
-      return;
+      return GET_CFG_FAIL;
     }
 
   const char *str = value.addr;
@@ -480,7 +487,7 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 	  break;
 	}
       LogError("Missing command to exec in %s\n", name);
-      exit(UNMANAGE_DISPLAY);
+      return GET_CFG_FAIL;
 
     case KEYWORD_SWITCH_SESSION:
       cmd->action_params = *(str = skip_space(end)) ? xstrdup(str) : NULL;
@@ -488,8 +495,10 @@ static void get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 
     default:
       LogError("Invalid action: %s: %s\n", name, str);
-      exit(UNMANAGE_DISPLAY);
+      return GET_CFG_FAIL;
     }
+
+  return ALLOC_STATIC;
 }
 
 int Zero = 0;
@@ -558,6 +567,8 @@ static struct resource_spec theme_resources[] = {
 	       username_input_position),
   DECLPIXELPAIR(message.shadow.offset, MESSAGE_SHADOW_OFFSET,
 		message_shadow_offset),
+  DECLPIXELPAIR(input.shadow.offset, INPUT_SHADOW_OFFSET,
+		input_shadow_offset),
   DECLPIXELPAIR(welcome.shadow.offset, WELCOME_SHADOW_OFFSET,
 		welcome_shadow_offset),
   DECLPIXELPAIR(password.prompt.shadow.offset, PASS_PROMPT_SHADOW_OFFSET,
@@ -570,9 +581,12 @@ static struct resource_spec theme_resources[] = {
 	     background_style),
   DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
 	     password_mask),
+  DECLSTRING(background.file, NULL, background_filename),
+  DECLSTRING(panel.file, NULL, panel_filename),
   DECLSTRING(password.prompt.string, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(username.prompt.string, DEFAULT_USER_PROMPT, username_prompt),
   DECLCOLOR(background.color, BKGND_COLOR, background_color),
+  DECLCOLOR(panel.color, PANEL_COLOR, panel_color),
   DECLCOLOR(message.color, MESSAGE_COLOR, message_color),
   DECLCOLOR(message.shadow.color, MESSAGE_SHADOW_COLOR, message_shadow_color),
   DECLCOLOR(welcome.color, WELCOME_COLOR, welcome_color),
@@ -638,14 +652,99 @@ void translate_position(struct position *posn, int width, int height,
     posn->y += height;
 }
 
+
+static void free_theme_resources(Display *dpy, struct cfg *cfg)
+{
+  struct resource_spec *spec = theme_resources;
+
+  for (int i = 0; i < NUM_THEME ; i++, spec++)
+    if (spec->free && *(int *)((char *)cfg + spec->allocated))
+      (spec->free)(dpy, (void *)((char *)cfg + spec->offset));
+
+  free_image_buffers(&cfg->panel_image);
+  free_image_buffers(&cfg->background_image);
+}
+
+
+static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
+{
+  XrmDatabase db;
+  int rc = 0;
+  char *olddir = realpath(".", NULL);
+  char name[48];
+  struct resource_spec *spec;
+
+  if (!olddir)
+    out_of_memory();
+
+  if (theme_path)
+    {
+      if (chdir(theme_path))
+	goto bugout;
+      if (!(db = XrmGetFileDatabase(THEME_FILE_NAME)))
+	goto bugout;
+    }
+  else
+    // Use compiled-in defaults.
+    db = XrmGetStringDatabase("");
+
+  strcpy(name, THEME_PREFIX);
+  spec = theme_resources;
+  for (int i = 0; i < NUM_THEME ; i++, spec++)
+    {
+      strcpy(&name[sizeof(THEME_PREFIX)-1], spec->name);
+      switch ((spec->allocate)(dpy, db, name, (char *)cfg + spec->offset,
+			  spec->default_value))
+	{
+	case GET_CFG_FAIL:
+	  free_theme_resources(dpy, cfg);
+	  goto bugout;
+	  break;
+	case ALLOC_DYNAMIC:
+	  *(int *)((char *)cfg + spec->allocated) = 1;
+	}
+    }
+
+  if (cfg->panel_filename
+      && !read_image(cfg->panel_filename, &cfg->panel_image))
+    goto bugout;
+
+  if (cfg->background_filename
+      && !read_image(cfg->background_filename, &cfg->background_image))
+    goto bugout;
+
+  if (chdir(olddir))
+    {
+      LogError("Bad chdir");
+      exit(UNMANAGE_DISPLAY);
+    }
+
+  XrmDestroyDatabase(db);
+
+  rc = 1;
+  goto done;
+
+ bugout:
+  LogError("Bad theme %s\n", theme_path);
+
+ done:
+  free(olddir);
+  return rc;
+}
+
+
 struct cfg *get_cfg(Display *dpy)
 {
   XrmDatabase db;
   char *theme_directory, *themes;
   static char name[48];
 
+#if defined(TESTCFG) || !defined(NOZEP)
+  db = XrmGetFileDatabase("gleem.conf");
+#else
   char *RMString = XResourceManagerString(dpy);
   db = XrmGetStringDatabase(RMString ? RMString : "");
+#endif
 
   memset(&cfg, 0, sizeof(cfg));
   strcpy(name, MAIN_PREFIX);
@@ -653,14 +752,20 @@ struct cfg *get_cfg(Display *dpy)
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
       strcpy(&name[sizeof(MAIN_PREFIX)-1], spec->name);
-      if ((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
-			   spec->default_value))
-	*(int *)((char *)&cfg + spec->allocated) = 1;
+      switch ((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
+			       spec->default_value))
+	{
+	case GET_CFG_FAIL:
+	  exit(UNMANAGE_DISPLAY);
+	case ALLOC_DYNAMIC:
+	  *(int *)((char *)&cfg + spec->allocated) = 1;
+	}
     }
   cfg.current_session = cfg.sessions;
   get_cfg_string(dpy, db, MAIN_PREFIX "theme-directory",
-		 &theme_directory, xstrdup("."));
-  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes, NULL);
+		 &theme_directory, xstrdup("./themes"));
+  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes,
+		 xstrdup("default"));
 
   if (cfg.command_count < 16)
     cfg.command_count = 16;
@@ -682,28 +787,22 @@ struct cfg *get_cfg(Display *dpy)
       for (int i = 0; i < NUM_CMD ; i++, spec++)
 	{
 	  strcpy(rest_of_name, spec->name);
-	  if ((spec->allocate)(dpy, db, name, (char *)cmd + spec->offset,
-			       spec->default_value))
-	    *(int *)((char *)cmd + spec->allocated) = 1;
+	  switch ((spec->allocate)(dpy, db, name, (char *)cmd + spec->offset,
+				   spec->default_value))
+	    {
+	    case GET_CFG_FAIL:
+	      exit(UNMANAGE_DISPLAY);
+	    case ALLOC_DYNAMIC:
+	      *(int *)((char *)cmd + spec->allocated) = 1;
+	    }
 	}
     }
 
   XrmDestroyDatabase(db);
 
-#ifdef TESTING
-  if (!(db = XrmGetFileDatabase("theme.conf")))
-    abort();
-#endif
+  // Find random theme here.
 
-  strcpy(name, THEME_PREFIX);
-  spec = theme_resources;
-  for (int i = 0; i < NUM_THEME ; i++, spec++)
-    {
-      strcpy(&name[sizeof(THEME_PREFIX)-1], spec->name);
-      if((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
-			  spec->default_value))
-	*(int *)((char *)&cfg + spec->allocated) = 1;      
-    }
+  get_theme(dpy, &cfg, ("themes",NULL));
 
   free(theme_directory);
   free(themes);
@@ -719,12 +818,7 @@ void release_cfg(Display *dpy, struct cfg *cfg)
 	(spec->free)(dpy, (void *)((char *)cfg + spec->offset));
     }
 
-  spec = theme_resources;
-  for (int i = 0; i < NUM_THEME ; i++, spec++)
-    {
-      if (spec->free && *(int *)((char *)cfg + spec->allocated))
-	(spec->free)(dpy, (void *)((char *)cfg + spec->offset));
-    }
+  free_theme_resources(dpy, cfg);
 
   for (int i = 0; i < cfg->command_count; i++)
     {
@@ -741,3 +835,15 @@ void release_cfg(Display *dpy, struct cfg *cfg)
 
   free(cfg->commands);
 }
+
+#ifdef TESTCFG
+int main(int argc, char *argv[])
+{
+  Display *dpy = XOpenDisplay(NULL);
+
+  if (dpy)
+    get_cfg(dpy);
+  
+  return 0;
+}
+#endif

@@ -17,26 +17,32 @@ int read_image(const char *filename, struct image *image)
   int success = 0;
   FILE *file;
 
+  if (image->rgb_data)
+    free(image->rgb_data);
+  if (image->alpha_data)
+    free(image->alpha_data);
+
   if ((file = fopen(filename, "rb")) == NULL)
-    return (success == 1);
-  if (fread(buf, 1, 4, file) != 4)
-    goto bugout;
-  rewind(file);
-  if ((ubuf[0] == 0x89) && !strncmp("PNG", buf + 1, 3))
-    success = read_png(file, filename,
-		      &image->width, &image->height,
-		      &image->rgb_data, &image->alpha_data);
-  else if ((ubuf[0] == 0xff) && (ubuf[1] == 0xd8))
-    success =
-      read_jpeg(file, filename,
-	       &image->width, &image->height,
-	       &image->rgb_data, &image->alpha_data);
-  else
-    fprintf(stderr, "Unknown image format\n");
+    return 0;
 
-  image->area = image->width * image->height;
+  if (fread(buf, 1, 4, file) == 4)
+    {
+      rewind(file);
+      if ((ubuf[0] == 0x89) && !strncmp("PNG", buf + 1, 3))
+	success = read_png(file, filename,
+			   &image->width, &image->height,
+			   &image->rgb_data, &image->alpha_data);
+      else if ((ubuf[0] == 0xff) && (ubuf[1] == 0xd8))
+	success =
+	  read_jpeg(file, filename,
+		    &image->width, &image->height,
+		    &image->rgb_data, &image->alpha_data);
+      else
+	fprintf(stderr, "Unknown image format\n");
+      
+      image->area = image->width * image->height;
+    }
 
- bugout:
   fclose(file);
   return (success == 1);
 }

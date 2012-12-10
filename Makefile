@@ -3,25 +3,25 @@ CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall -pedantic
 LDFLAGS+=-ljpeg -lpng -lX11 -lXft -lXinerama -ldl
 
 GOBJS=greet.o
-OBJS=image.o numlock.o jpeg.o png.o util.o cfg.o keywords.o
+OBJS=image.o numlock.o read.o util.o cfg.o keywords.o
 BINS=test testcfg
 
 .PHONY: clean tags
 
 test: ${OBJS} test.c
-	 gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
+	gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
 
-testcfg: cfg.o util.o keywords.o
-	 gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
+testcfg: cfg.o ${OBJS}
+	gcc ${LDFLAGS} ${CFLAGS} -o $@ $^
 
 libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
 	gcc ${LDFLAGS} -shared -o $@ $^
 
-cfg.c: keywords.h
-
 install: libXdmGreet.so
 	mv -n /etc/X11/xdm/libXdmGreet.so /etc/X11/xdm/libXdmGreet.so~
 	cp libXdmGreet.so /etc/X11/xdm/libXdmGreet.so
+
+cfg.c:	keywords.h
 
 keywords.c: keywords.sh
 	sh ./keywords.sh
