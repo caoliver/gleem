@@ -53,6 +53,7 @@ struct command {
 struct cfg {
   struct image background_image, panel_image;
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
+  int cursor_blink, input_highlight;
   int message_duration, command_count;
   struct screen_specs screen_specs;
   int background_style;
@@ -68,6 +69,7 @@ struct cfg {
   struct position password_input_position, username_input_position;
   struct position password_input_size, username_input_size;
   ADD_ALLOC_FLAG(XftColor, background_color);
+  ADD_ALLOC_FLAG(XftColor, cursor_color);
   ADD_ALLOC_FLAG(XftColor, panel_color);
   ADD_ALLOC_FLAG(XftColor, message_color);
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);

@@ -76,22 +76,23 @@ static int get_cfg_boolean(Display *dpy, XrmDatabase db, const char *name,
 {
   char *type;
   XrmValue value;
+  char *bool_name = (char *)default_value;
 
   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    switch (lookup_keyword(value.addr, value.size - 1))
-      {
-      case KEYWORD_TRUE:
-	*(int *)valptr = 1;
-	break;
-      case KEYWORD_FALSE:
-	*(int *)valptr = 0;
-	break;
-      default:
-	LogError("Invalid boolean resource %s for %s\n", value.addr, name);
-	return GET_CFG_FAIL;
-      }
-  else
-    *(int *)valptr = *(int *)default_value;
+    bool_name = value.addr;
+
+  switch (lookup_keyword(bool_name, strlen(bool_name)))
+    {
+    case KEYWORD_TRUE:
+      *(int *)valptr = 1;
+      break;
+    case KEYWORD_FALSE:
+      *(int *)valptr = 0;
+      break;
+    default:
+      LogError("Invalid boolean resource %s for %s\n", value.addr, name);
+      return GET_CFG_FAIL;
+    }
 
   return ALLOC_STATIC;
 }
@@ -502,7 +503,6 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 }
 
 int Zero = 0;
-#define Untrue Zero
 
 int default_message_duration = DEFAULT_MESSAGE_DURATION;
 int default_command_count = DEFAULT_COMMAND_COUNT;
@@ -528,19 +528,21 @@ int default_command_count = DEFAULT_COMMAND_COUNT;
 #define DECLFONT(NAME, DEFAULT, PLACE)					\
   DECLDYNAMIC(NAME, get_cfg_font, free_cfg_font, DEFAULT_##DEFAULT, PLACE)
 
-#define DECLPOSITION(NAME, DEFAULT, PLACE)				\
+#define DECLPOSITION(NAME, DEFAULT, PLACE)			\
   DECLSTATIC(NAME, get_cfg_position, DEFAULT_##DEFAULT, PLACE)
 #define DECLPIXELPAIR(NAME, DEFAULT, PLACE)				\
   DECLSTATIC(NAME, get_cfg_pixel_pair, DEFAULT_##DEFAULT, PLACE)
+#define DECLBOOLEAN(NAME, DEFAULT,PLACE)			\
+  DECLSTATIC(NAME, get_cfg_boolean, DEFAULT_##DEFAULT, PLACE)
 
 #define DECL_STRUCT cfg
 
 static struct resource_spec cfg_resources[] = {
-  DECLSTATIC(ignore-capslock, get_cfg_boolean, &Untrue, ignore_capslock),
-  DECLSTATIC(numlock, get_cfg_boolean, &Untrue, numlock),
-  DECLSTATIC(hide-mouse, get_cfg_boolean, &Untrue, hide_mouse),
-  DECLSTATIC(auto-login, get_cfg_boolean, &Untrue, auto_login),
-  DECLSTATIC(focus-password, get_cfg_boolean, &Untrue, auto_login),
+  DECLBOOLEAN(ignore-capslock, IGNORE_CAPSLOCK, ignore_capslock),
+  DECLBOOLEAN(numlock, NUMLOCK, numlock),
+  DECLBOOLEAN(hide-mouse, HIDE_MOUSE, hide_mouse),
+  DECLBOOLEAN(auto-login, AUTO_LOGIN, auto_login),
+  DECLBOOLEAN(focus-password, FOCUS_PASSWORD, auto_login),
   DECLSTRING(default-user, NULL, default_user),
   DECLSTRING(welcome-message, DEFAULT_WELCOME_MESSAGE, welcome_message),
   DECLSTRING(sessions, NULL, sessions),
@@ -579,10 +581,13 @@ static struct resource_spec theme_resources[] = {
 	     background_style),
   DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
 	     password_mask),
+  DECLBOOLEAN(cursor.blink, CURSOR_BLINK, cursor_blink),
+  DECLBOOLEAN(input.highlight, INPUT_HIGHLIGHT, input_highlight),
   DECLSTRING(background.file, NULL, background_filename),
   DECLSTRING(panel.file, NULL, panel_filename),
   DECLSTRING(password.prompt.string, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(username.prompt.string, DEFAULT_USER_PROMPT, username_prompt),
+  DECLCOLOR(cursor.color, CURSOR_COLOR, cursor_color),
   DECLCOLOR(background.color, BKGND_COLOR, background_color),
   DECLCOLOR(panel.color, PANEL_COLOR, panel_color),
   DECLCOLOR(message.color, MESSAGE_COLOR, message_color),

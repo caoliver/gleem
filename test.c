@@ -33,10 +33,7 @@ void text_op(Display *dpy, Window background, Window panel, int scr,
   XftTextExtentsUtf8(dpy, font, (unsigned char *)str, len, &extents);
   int height = input_height ? input_height : extents.height;
   if (TRANSLATE_POSITION(position, extents.width, height, cfg, 1))
-    {
-      printf("bump = %d\n", bump);
-      position->y -= bump;
-    }
+    position->y -= bump;
 
   int erasex = (shadow_offset->x < 0 ? shadow_offset->x : 0) - extents.x,
     erasey = (shadow_offset->y < 0 ? shadow_offset->y : 0) - extents.y,
@@ -89,37 +86,59 @@ void text_op(Display *dpy, Window background, Window panel, int scr,
     }
 }
 
-#define CURSOR_PIXELS 3
+
+int cursor_x, cursor_y, cursor_h, cursor_state;
+
+void draw_cursor(Display *dpy, int scr, Window win, struct cfg *cfg)
+{
+  if (cursor_state || cfg->input_highlight)
+    {
+      Visual* visual = DefaultVisual(dpy, scr);
+      Colormap colormap = DefaultColormap(dpy, scr);
+      XftDraw *draw = XftDrawCreate(dpy, win, visual, colormap);
+      XftDrawRect(draw, 
+		  cursor_state
+		  ? &cfg->cursor_color
+		  : &cfg->input_highlight_color,
+		  cursor_x, cursor_y,
+		  CURSOR_WIDTH, cursor_h);
+    }
+  else
+    XClearArea(dpy, win, cursor_x, cursor_y,
+	       CURSOR_WIDTH, cursor_h, False);
+  XSync(dpy, False);
+}
 
 void show_input_at(Display *dpy, struct cfg *cfg,
 		   int scr, Window win, char *str,
 		   struct position *position,
 		   struct position *size,
-		   int cursor, int is_secret, int highlight_box)
+		   int cursor, int is_secret)
 {
   Visual* visual = DefaultVisual(dpy, scr);
   Colormap colormap = DefaultColormap(dpy, scr);
   XftFont *font;
-  int ASSIGN_XY(x, y, TO_XY(*position)), ASSIGN_XY(w, h, TO_XY(*size));
+  int ASSIGN_XY(w, h, TO_XY(*size));
   if (TRANSLATE_POSITION(position, w, h, cfg, 1))
     {
       position->x -= cfg->panel_position.x;
       position->y -= cfg->panel_position.y;
     }
+  int ASSIGN_XY(x, y, TO_XY(*position));
 
   XftColor *color = &cfg->input_color,
     *color2 = &cfg->input_alternate_color,
-    *scolor = &cfg->input_shadow_color,
-    *hcolor = &cfg->input_highlight_color;
+    *scolor = &cfg->input_shadow_color;
   XftDraw *draw = XftDrawCreate(dpy, win, visual, colormap);
 
   int star_width;
   int ASSIGN_XY(sxoff, syoff, TO_XY(cfg->input_shadow_offset));
 
-  if (!highlight_box)
-    XClearArea(dpy, win, x, y - h, w, h + (syoff < 0 ? -syoff : syoff), False);
+  if (cfg->input_highlight)
+    XftDrawRect(draw, &cfg->input_highlight_color,
+		x, y - h, w, h + (syoff < 0 ? -syoff : syoff));
   else
-    XftDrawRect(draw, hcolor, x, y - h, w, h + (syoff < 0 ? -syoff : syoff));
+    XClearArea(dpy, win, x, y - h, w, h + (syoff < 0 ? -syoff : syoff), False);
   w -= sxoff < 0 ? -sxoff : sxoff;
   y += syoff < 0 ? -syoff : 0;
   x += sxoff < 0 ? -sxoff : 0;
@@ -129,7 +148,7 @@ void show_input_at(Display *dpy, struct cfg *cfg,
   int len = strlen(str);
   XftTextExtents8(dpy, font, (unsigned char *)"|", 1, &extents);
   int bump = extents.height - extents.y;
-  int right_margin = cursor ? 5 + extents.width : 1;
+  int right_margin = cursor ? 1 + extents.width : 1;
   if (is_secret)
     {
       unsigned char secret_mask = cfg->password_mask;
@@ -138,7 +157,7 @@ void show_input_at(Display *dpy, struct cfg *cfg,
       if (star_width < 8)
 	star_width += 2;
       int extras =
-	((len + 1) * star_width - 1 + right_margin + CURSOR_PIXELS - w)
+	((len + 1) * star_width - 1 + right_margin + CURSOR_WIDTH - w)
 	/ star_width;
       if (extras < 0)
 	extras = 0;
@@ -156,8 +175,13 @@ void show_input_at(Display *dpy, struct cfg *cfg,
 	x += star_width * (len - extras);
 
       if (cursor)
-	XftDrawRect(draw, color, x + right_margin, y - h + 1,
-		    CURSOR_PIXELS, h - 1);
+	{
+	  cursor_state = 1;
+	  cursor_x = x + right_margin;
+	  cursor_y = y - h + CURSOR_TOP_ROOM;
+	  cursor_h = h - CURSOR_BOTTOM_ROOM - CURSOR_TOP_ROOM; 
+	  draw_cursor(dpy, scr, win, cfg);
+	}
     }
   else
     {
@@ -172,7 +196,7 @@ void show_input_at(Display *dpy, struct cfg *cfg,
       do
 	{
 	  XftTextExtents8(dpy, font, (unsigned char *)str, len, &extents);
-	  if ((too_long = extents.width + right_margin + CURSOR_PIXELS > w))
+	  if ((too_long = extents.width + right_margin + CURSOR_WIDTH > w))
 	    {
 	      str++;
 	      len--;
@@ -188,8 +212,13 @@ void show_input_at(Display *dpy, struct cfg *cfg,
 			 color, font, x, y - bump, (unsigned char *)str, len);
 	}
       if (cursor)
-	XftDrawRect(draw, color, x + right_margin + extents.width, y - h + 1,
-		    CURSOR_PIXELS, h - 1);
+	{
+	  cursor_state = 1;
+	  cursor_x = x + right_margin + extents.width;
+	  cursor_y = y - h + CURSOR_TOP_ROOM;
+	  cursor_h = h - CURSOR_BOTTOM_ROOM - CURSOR_TOP_ROOM;
+	  draw_cursor(dpy, scr, win, cfg);
+	}
     }
   XftDrawDestroy(draw);
 }
@@ -232,11 +261,14 @@ void do_stuff()
 			  &cfg->background_image,
 			  TO_XY(cfg->panel_position));
   else
-    frame_background(&cfg->panel_image,
-		     DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT,
-		     cfg->screen_specs.width + 1, 0, &cfg->panel_color);
-  TRANSLATE_POSITION(&cfg->panel_position, cfg->panel_image.width,
-		     cfg->panel_image.height, cfg, 0);
+    {
+      cfg->input_highlight = 1;
+      frame_background(&cfg->panel_image,
+		       DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT,
+		       cfg->screen_specs.width + 1, 0, &cfg->panel_color);
+      TRANSLATE_POSITION(&cfg->panel_position, cfg->panel_image.width,
+			 cfg->panel_image.height, cfg, 0);
+    }
   pwid = XCreateSimpleWindow(dpy, wid,
 			     TO_XY(cfg->panel_position),
 			     cfg->panel_image.width,
@@ -261,7 +293,7 @@ void do_stuff()
 #ifndef NOZEP
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
 #endif
-  int is_secret = 0, highlight = 1;
+  int is_secret = 0;
 
   int again = 1;
   char out[128]="";
@@ -282,89 +314,99 @@ void do_stuff()
   show_input_at(dpy, cfg, scr, pwid, out,
 		&cfg->username_input_position,
 		&cfg->username_input_size,
-		1, is_secret, highlight);
+		1, is_secret);
   while  (again)
-    if(XPending(dpy) || poll(&pfd, 1, -1) > 0)
-      while(XPending(dpy))
-	{
-	  XEvent event;
-	  KeySym keysym;
-	  XComposeStatus compstatus;
-	  char ascii;
+    if(!XPending(dpy))
+      {
+	switch (poll(&pfd, 1, CURSOR_BLINK_SPEED))
+	  {
+	  case -1:
+	    continue;
+	  case 0:
+	    cursor_state = !cfg->cursor_blink || !cursor_state;
+	    draw_cursor(dpy, scr, pwid, cfg);
+	  }
+	while(XPending(dpy))
+	  {
+	    XEvent event;
+	    KeySym keysym;
+	    XComposeStatus compstatus;
+	    char ascii;
 
 
-	  XNextEvent(dpy, &event);
-	  switch(event.type)
-	    {
-	    case Expose:
-	      text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
-		      cfg->username_prompt, cfg->prompt_font,
-		      &cfg->prompt_color, &cfg->prompt_shadow_color,
-		      &cfg->username_prompt_position,
-		      &cfg->prompt_shadow_offset, cfg->username_input_size.y);
-	      text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
-		      cfg->welcome_message, cfg->welcome_font,
-		      &cfg->welcome_color,
-		      &cfg->welcome_shadow_color,
-		      &cfg->welcome_position, &cfg->welcome_shadow_offset, 0);
-	      show_input_at(dpy, cfg, scr, pwid, out,
-			    &cfg->username_input_position,
-			    &cfg->username_input_size,
-			    1, is_secret, highlight);
-	      break;
+	    XNextEvent(dpy, &event);
+	    switch(event.type)
+	      {
+	      case Expose:
+		text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
+			cfg->username_prompt, cfg->prompt_font,
+			&cfg->prompt_color, &cfg->prompt_shadow_color,
+			&cfg->username_prompt_position,
+			&cfg->prompt_shadow_offset, cfg->username_input_size.y);
+		text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
+			cfg->welcome_message, cfg->welcome_font,
+			&cfg->welcome_color,
+			&cfg->welcome_shadow_color,
+			&cfg->welcome_position, &cfg->welcome_shadow_offset, 0);
+		show_input_at(dpy, cfg, scr, pwid, out,
+			      &cfg->username_input_position,
+			      &cfg->username_input_size,
+			      1, is_secret);
+		break;
 	      
-	    case KeyPress:
-	      XLookupString(&event.xkey, &ascii, 1, &keysym, &compstatus);
-	      switch(keysym)
-		{
-		case XK_Delete:
-		case XK_BackSpace:
-		  if (outix > 0)
-		    out[--outix] = 0;
-		  break;
-		case XK_Return:
-		case XK_Tab:
-		case XK_KP_Enter:
-		  text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
-			  cfg->welcome_message, cfg->welcome_font, NULL, NULL,
-			  &cfg->welcome_position, &cfg->welcome_shadow_offset,
-			  0);
-		  XSync(dpy, False);
-		  //		  sleep(2);
-		  XDestroyWindow(dpy, wid);
-		  XClearWindow(dpy, rootid);
-		  XSync(dpy, False);
-		  write(1, "Result: ", 9);
-		  if (outix)
-		    write(1, out, outix);
-		  write(1, "\n", 1);
-		  return;
-		case XK_w:
-		case XK_u:
-		case XK_c:
-		  if (((XKeyEvent *)&event)->state & ControlMask)
-		    {
-		      if (keysym == XK_c)
-			puts("Restart");
-		      out[outix = 0] = 0;
-		      break;
-		    }
-		default:
-		  if (isprint(ascii) &&
-		      (keysym < XK_Shift_L || keysym > XK_Hyper_R) &&
-		      outix < 128)
-		    {
-		      out[outix++] = ascii;
-		      out[outix] = 0;
-		    }
-		}
-	      show_input_at(dpy, cfg, scr, pwid, out,
-			    &cfg->username_input_position,
-			    &cfg->username_input_size,
-			    1, is_secret, highlight);
-	      break;
-	    }
-	}
+	      case KeyPress:
+		XLookupString(&event.xkey, &ascii, 1, &keysym, &compstatus);
+		switch(keysym)
+		  {
+		  case XK_Delete:
+		  case XK_BackSpace:
+		    if (outix > 0)
+		      out[--outix] = 0;
+		    break;
+		  case XK_Return:
+		  case XK_Tab:
+		  case XK_KP_Enter:
+		    text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
+			    cfg->welcome_message, cfg->welcome_font, NULL, NULL,
+			    &cfg->welcome_position, &cfg->welcome_shadow_offset,
+			    0);
+		    XSync(dpy, False);
+		    //		  sleep(2);
+		    XDestroyWindow(dpy, wid);
+		    XClearWindow(dpy, rootid);
+		    XSync(dpy, False);
+		    write(1, "Result: ", 9);
+		    if (outix)
+		      write(1, out, outix);
+		    write(1, "\n", 1);
+		    return;
+		  case XK_w:
+		  case XK_u:
+		  case XK_c:
+		    if (((XKeyEvent *)&event)->state & ControlMask)
+		      {
+			if (keysym == XK_c)
+			  puts("Restart");
+			out[outix = 0] = 0;
+			break;
+		      }
+		  default:
+		    if (isprint(ascii) &&
+			(keysym < XK_Shift_L || keysym > XK_Hyper_R) &&
+			outix < 128)
+		      {
+			out[outix++] = ascii;
+			out[outix] = 0;
+		      }
+		  }
+		show_input_at(dpy, cfg, scr, pwid, out,
+			      &cfg->username_input_position,
+			      &cfg->username_input_size,
+			      1, is_secret);
+		break;
+	      }
+	  }
+      }
 }
 
 int main(int argc, char *argv[])

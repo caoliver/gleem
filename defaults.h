@@ -1,16 +1,29 @@
 #ifndef _DEFAULTS_H_
 #define _DEFAULTS_H_
 
-#define DEFAULT_INSET 100
+// Cursor geometry isn't run time configurable.  Should it be?
+#define CURSOR_WIDTH 3
+#define CURSOR_BOTTOM_ROOM 1
+#define CURSOR_TOP_ROOM 1
+#define CURSOR_BLINK_SPEED 750
 
 #define DEFAULT_MESSAGE_DURATION 3
 #define DEFAULT_COMMAND_COUNT 16
+
+#define DEFAULT_NUMLOCK "false"
+#define DEFAULT_HIDE_MOUSE "false"
+#define DEFAULT_IGNORE_CAPSLOCK "false"
+#define DEFAULT_AUTO_LOGIN "false"
+#define DEFAULT_FOCUS_PASSWORD "false"
+#define DEFAULT_CURSOR_BLINK "true"
+#define DEFAULT_INPUT_HIGHLIGHT "false"
 
 #define DEFAULT_WELCOME_MESSAGE "Welcome to ~h"
 #define DEFAULT_USER_PROMPT "Username:"
 #define DEFAULT_PASS_PROMPT "Password:"
 #define DEFAULT_PASS_MASK " "
 
+#define DEFAULT_CURSOR_COLOR "gray30"
 #define DEFAULT_BKGND_STYLE "color"
 #define DEFAULT_BKGND_COLOR "black"
 #define DEFAULT_PANEL_COLOR "gray30"
@@ -35,10 +48,10 @@
 #define DEFAULT_PANEL_HEIGHT 300
 #define DEFAULT_MESSAGE_POSN "50% 30% center"
 #define DEFAULT_WELCOME_POSN "50% 40% center"
-#define DEFAULT_PASS_PROMPT_POSN "140 200 left"
-#define DEFAULT_PASS_INPUT_POSN "160 200 right"
-#define DEFAULT_USER_PROMPT_POSN "140 200 left"
-#define DEFAULT_USER_INPUT_POSN "160 200 right"
+#define DEFAULT_PASS_PROMPT_POSN "160 180 left"
+#define DEFAULT_PASS_INPUT_POSN "180 180 right"
+#define DEFAULT_USER_PROMPT_POSN "160 180 left"
+#define DEFAULT_USER_INPUT_POSN "180 180 right"
 #define DEFAULT_MESSAGE_SHADOW_OFFSET "0 0"
 #define DEFAULT_WELCOME_SHADOW_OFFSET "0 0"
 #define DEFAULT_PROMPT_SHADOW_OFFSET "0 0"
