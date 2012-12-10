@@ -19,16 +19,21 @@ struct position {
 #define TRANSLATION_IS_CACHED 1
 
 #define TRANSLATE_POSITION(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)	\
-  if (!((POSITION)->flags & TRANSLATION_IS_CACHED))			\
-    translate_position(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT)
+  (((POSITION)->flags & TRANSLATION_IS_CACHED)				\
+   ? 0									\
+   :  translate_position(POSITION, WIDTH, HEIGHT, CFG, IS_TEXT))
 
 
 #define XY(X,Y) X,Y
 #define TO_XY(POSITION) (POSITION).x, (POSITION).y
-#define OFFSET_XY_HELPER(X,Y,XDELTA,YDELTA) X+XDELTA,Y+YDELTA
-#define OFFSET_XY(A,B) OFFSET_XY_HELPER(A,B)
+#define ASSIGN_XY_HELPER(VAR1, VAR2, VAL1, VAL2) VAR1 = VAL1, VAR2 = VAL2
+#define ASSIGN_XY(VAR1, VAR2, ARG) ASSIGN_XY_HELPER(VAR1, VAR2, ARG)
+#define ADD_XY_HELPER(X,Y,XDELTA,YDELTA) X+XDELTA,Y+YDELTA
+#define ADD_XY(A,B) ADD_XY_HELPER(A,B)
+#define ADD_POS(A,B) ADD_XY(TO_XY(A),XY(B))
 #define NEGATE_XY_HELPER(X,Y) -X,-Y
 #define NEGATE_XY(ARG) NEGATE_XY_HELPER(ARG)
+#define NEGATE_POS(A) NEGATE_XY(TO_XY(A))
 
 #define PANEL_POSITION_NAME panel_position
 
@@ -58,7 +63,7 @@ struct cfg {
   struct position message_position, welcome_position;
   struct position message_shadow_offset, welcome_shadow_offset;
   struct position password_prompt_position, username_prompt_position;
-  struct position pass_prompt_shadow_offset, user_prompt_shadow_offset;
+  struct position prompt_shadow_offset;
   struct position input_shadow_offset;
   struct position password_input_position, username_input_position;
   struct position password_input_size, username_input_size;
@@ -68,18 +73,16 @@ struct cfg {
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);
   ADD_ALLOC_FLAG(XftColor, welcome_color);
   ADD_ALLOC_FLAG(XftColor, welcome_shadow_color);
-  ADD_ALLOC_FLAG(XftColor, user_color);
-  ADD_ALLOC_FLAG(XftColor, user_shadow_color);
-  ADD_ALLOC_FLAG(XftColor, pass_color);
-  ADD_ALLOC_FLAG(XftColor, pass_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, prompt_color);
+  ADD_ALLOC_FLAG(XftColor, prompt_shadow_color);
   ADD_ALLOC_FLAG(XftColor, input_color);
   ADD_ALLOC_FLAG(XftColor, input_alternate_color);
+  ADD_ALLOC_FLAG(XftColor, input_highlight_color);
   ADD_ALLOC_FLAG(XftColor, input_shadow_color);
   ADD_ALLOC_FLAG(XftFont *, message_font);
   ADD_ALLOC_FLAG(XftFont *, welcome_font);
   ADD_ALLOC_FLAG(XftFont *, input_font);
-  ADD_ALLOC_FLAG(XftFont *, pass_font);
-  ADD_ALLOC_FLAG(XftFont *, user_font);
+  ADD_ALLOC_FLAG(XftFont *, prompt_font);
   ADD_ALLOC_FLAG(char *, default_user);
   ADD_ALLOC_FLAG(char *, welcome_message);
   ADD_ALLOC_FLAG(char *, sessions);
@@ -94,7 +97,7 @@ struct cfg *get_cfg(Display *dpy);
 void release_cfg(Display *dpy, struct cfg *cfg);
 void position_to_coord(struct position *posn, int width, int height,
 		       struct cfg* cfg, int is_text);
-void translate_position(struct position *posn, int width, int height,
+int translate_position(struct position *posn, int width, int height,
                         struct cfg* cfg, int is_text);
 
 #endif /* _CFG_H_ */

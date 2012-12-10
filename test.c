@@ -17,41 +17,25 @@ void text_op(Display *dpy, Window background, Window panel, int scr,
 	     char *str,
 	     XftFont *font,
 	     XftColor *color, XftColor *shadow_color,
-	     struct position *position, struct position *shadow_offset)
+	     struct position *position, struct position *shadow_offset,
+	     int input_height)
 {
   int len = strlen(str);
   XGlyphInfo extents;
-  XftTextExtentsUtf8(dpy, font, (unsigned char *)str, len, &extents);
-  TRANSLATE_POSITION(position, extents.width, extents.height, cfg, 1);
 
-  if (color)
+  int bump = 0;
+  if (input_height)
     {
-      XftDraw *draw;
-      draw = XftDrawCreate(dpy, background, DefaultVisual(dpy, scr),
-			   DefaultColormap(dpy, scr));
-  
-      if (shadow_offset->x || shadow_offset->y)
-	XftDrawStringUtf8(draw, shadow_color, font,
-			  OFFSET_XY(TO_XY(*position), TO_XY(*shadow_offset)),
-	  (unsigned char *)str, len);
-      XftDrawStringUtf8(draw, color, font, TO_XY(*position),
-			(unsigned char *)str, len);
-      XftDrawDestroy(draw);
-      draw = XftDrawCreate(dpy, panel, DefaultVisual(dpy, scr),
-			   DefaultColormap(dpy, scr));
-  
-      if (shadow_offset->x || shadow_offset->y)
-	XftDrawStringUtf8(draw, shadow_color, font,
-			  OFFSET_XY(TO_XY(*position),
-				    OFFSET_XY(TO_XY(*shadow_offset),
-					      NEGATE_XY(TO_XY(cfg->panel_position)))),
-			  (unsigned char *)str, len);
-      XftDrawStringUtf8(draw, color, font,
-			OFFSET_XY(TO_XY(*position),
-				  NEGATE_XY(TO_XY(cfg->panel_position))),
-			(unsigned char *)str, len);
-      XftDrawDestroy(draw);
-      return;
+      XftTextExtents8(dpy, cfg->input_font, (unsigned char *)"|", 1, &extents);
+      bump = extents.height - extents.y;
+    }
+
+  XftTextExtentsUtf8(dpy, font, (unsigned char *)str, len, &extents);
+  int height = input_height ? input_height : extents.height;
+  if (TRANSLATE_POSITION(position, extents.width, height, cfg, 1))
+    {
+      printf("bump = %d\n", bump);
+      position->y -= bump;
     }
 
   int erasex = (shadow_offset->x < 0 ? shadow_offset->x : 0) - extents.x,
@@ -65,37 +49,77 @@ void text_op(Display *dpy, Window background, Window panel, int scr,
      ? -shadow_offset->y
      : shadow_offset->y);
 	
-  XClearArea(dpy, background, OFFSET_XY(TO_XY(*position), XY(erasex, erasey)),
-	     erasew, eraseh, True);
+  XClearArea(dpy, background, ADD_POS(*position, XY(erasex, erasey)),
+	     erasew, eraseh, False);
   XClearArea(dpy, panel,
-	     OFFSET_XY(TO_XY(*position),
-		       OFFSET_XY(NEGATE_XY(TO_XY(cfg->panel_position)),
-				 XY(erasex, erasey))),
-	     erasew, eraseh, True);
+	     ADD_XY(TO_XY(*position),
+		    ADD_XY(NEGATE_POS(cfg->panel_position),
+			   XY(erasex, erasey))),
+	     erasew, eraseh, False);
+
+  if (color)
+    {
+      XftDraw *draw;
+      draw = XftDrawCreate(dpy, background, DefaultVisual(dpy, scr),
+      			   DefaultColormap(dpy, scr));
+
+      if (shadow_offset->x || shadow_offset->y)
+      	XftDrawStringUtf8(draw, shadow_color, font,
+      			  ADD_POS(*position, TO_XY(*shadow_offset)),
+      			  (unsigned char *)str, len);
+      XftDrawStringUtf8(draw, color, font, TO_XY(*position),
+      			(unsigned char *)str, len);
+      XftDrawDestroy(draw);
+
+      draw = XftDrawCreate(dpy, panel, DefaultVisual(dpy, scr),
+			   DefaultColormap(dpy, scr));
+  
+      if (shadow_offset->x || shadow_offset->y)
+	XftDrawStringUtf8(draw, shadow_color, font,
+			  ADD_POS(*position,
+				  ADD_POS(*shadow_offset,
+					  NEGATE_POS(cfg->panel_position))),
+			  (unsigned char *)str, len);
+      XftDrawStringUtf8(draw, color, font,
+			ADD_POS(*position,
+				NEGATE_POS(cfg->panel_position)),
+			(unsigned char *)str, len);
+      XftDrawDestroy(draw);
+      return;
+    }
 }
 
 #define CURSOR_PIXELS 3
 
 void show_input_at(Display *dpy, struct cfg *cfg,
 		   int scr, Window win, char *str,
-		   int x, int y, int w, int h, int cursor,
-		   int is_secret)
+		   struct position *position,
+		   struct position *size,
+		   int cursor, int is_secret, int highlight_box)
 {
   Visual* visual = DefaultVisual(dpy, scr);
   Colormap colormap = DefaultColormap(dpy, scr);
   XftFont *font;
-  XftColor *color, *color2, *scolor;
+  int ASSIGN_XY(x, y, TO_XY(*position)), ASSIGN_XY(w, h, TO_XY(*size));
+  if (TRANSLATE_POSITION(position, w, h, cfg, 1))
+    {
+      position->x -= cfg->panel_position.x;
+      position->y -= cfg->panel_position.y;
+    }
 
-  color = &cfg->input_color;
-  color2 = &cfg->input_alternate_color;
-  scolor = &cfg->input_shadow_color;
+  XftColor *color = &cfg->input_color,
+    *color2 = &cfg->input_alternate_color,
+    *scolor = &cfg->input_shadow_color,
+    *hcolor = &cfg->input_highlight_color;
   XftDraw *draw = XftDrawCreate(dpy, win, visual, colormap);
 
   int star_width;
-  int sxoff=cfg->input_shadow_offset.x,
-    syoff=cfg->input_shadow_offset.y;
+  int ASSIGN_XY(sxoff, syoff, TO_XY(cfg->input_shadow_offset));
 
-  XClearArea(dpy, win, x, y - h, w, h + (syoff < 0 ? -syoff : syoff), False);
+  if (!highlight_box)
+    XClearArea(dpy, win, x, y - h, w, h + (syoff < 0 ? -syoff : syoff), False);
+  else
+    XftDrawRect(draw, hcolor, x, y - h, w, h + (syoff < 0 ? -syoff : syoff));
   w -= sxoff < 0 ? -sxoff : sxoff;
   y += syoff < 0 ? -syoff : 0;
   x += sxoff < 0 ? -sxoff : 0;
@@ -105,7 +129,7 @@ void show_input_at(Display *dpy, struct cfg *cfg,
   int len = strlen(str);
   XftTextExtents8(dpy, font, (unsigned char *)"|", 1, &extents);
   int bump = extents.height - extents.y;
-  int right_margin = cursor ? 5 - extents.width : 1;
+  int right_margin = cursor ? 5 + extents.width : 1;
   if (is_secret)
     {
       unsigned char secret_mask = cfg->password_mask;
@@ -237,7 +261,7 @@ void do_stuff()
 #ifndef NOZEP
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
 #endif
-  int is_secret = 0;
+  int is_secret = 0, highlight = 1;
 
   int again = 1;
   char out[128]="";
@@ -247,18 +271,18 @@ void do_stuff()
   
 
   text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
-	  cfg->username_prompt, cfg->user_font,
-	  &cfg->user_color,
-	  &cfg->user_shadow_color,
-	  &cfg->username_prompt_position, &cfg->user_prompt_shadow_offset);
+	  cfg->username_prompt, cfg->prompt_font,
+	  &cfg->prompt_color, &cfg->prompt_shadow_color,
+	  &cfg->username_prompt_position,
+	  &cfg->prompt_shadow_offset, cfg->username_input_size.y);
   text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
 	  cfg->welcome_message, cfg->welcome_font, &cfg->welcome_color,
 	  &cfg->welcome_shadow_color,
-	  &cfg->welcome_position, &cfg->welcome_shadow_offset);
+	  &cfg->welcome_position, &cfg->welcome_shadow_offset, 0);
   show_input_at(dpy, cfg, scr, pwid, out,
-		TO_XY(cfg->username_input_position),
-		TO_XY(cfg->username_input_size),
-		1, is_secret);
+		&cfg->username_input_position,
+		&cfg->username_input_size,
+		1, is_secret, highlight);
   while  (again)
     if(XPending(dpy) || poll(&pfd, 1, -1) > 0)
       while(XPending(dpy))
@@ -274,20 +298,19 @@ void do_stuff()
 	    {
 	    case Expose:
 	      text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
-		      cfg->username_prompt, cfg->user_font,
-		      &cfg->user_color,
-		      &cfg->user_shadow_color,
+		      cfg->username_prompt, cfg->prompt_font,
+		      &cfg->prompt_color, &cfg->prompt_shadow_color,
 		      &cfg->username_prompt_position,
-		      &cfg->user_prompt_shadow_offset);
+		      &cfg->prompt_shadow_offset, cfg->username_input_size.y);
 	      text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
 		      cfg->welcome_message, cfg->welcome_font,
 		      &cfg->welcome_color,
 		      &cfg->welcome_shadow_color,
-		      &cfg->welcome_position, &cfg->welcome_shadow_offset);
+		      &cfg->welcome_position, &cfg->welcome_shadow_offset, 0);
 	      show_input_at(dpy, cfg, scr, pwid, out,
-			    TO_XY(cfg->username_input_position),
-			    TO_XY(cfg->username_input_size),
-			    1, is_secret);
+			    &cfg->username_input_position,
+			    &cfg->username_input_size,
+			    1, is_secret, highlight);
 	      break;
 	      
 	    case KeyPress:
@@ -304,7 +327,8 @@ void do_stuff()
 		case XK_KP_Enter:
 		  text_op(dpy, wid, pwid, DefaultScreen(dpy), cfg,
 			  cfg->welcome_message, cfg->welcome_font, NULL, NULL,
-			  &cfg->welcome_position, &cfg->welcome_shadow_offset);
+			  &cfg->welcome_position, &cfg->welcome_shadow_offset,
+			  0);
 		  XSync(dpy, False);
 		  //		  sleep(2);
 		  XDestroyWindow(dpy, wid);
@@ -335,9 +359,9 @@ void do_stuff()
 		    }
 		}
 	      show_input_at(dpy, cfg, scr, pwid, out,
-			    TO_XY(cfg->username_input_position),
-			    TO_XY(cfg->username_input_size),
-			    1, is_secret);
+			    &cfg->username_input_position,
+			    &cfg->username_input_size,
+			    1, is_secret, highlight);
 	      break;
 	    }
 	}

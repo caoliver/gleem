@@ -571,10 +571,8 @@ static struct resource_spec theme_resources[] = {
 		input_shadow_offset),
   DECLPIXELPAIR(welcome.shadow.offset, WELCOME_SHADOW_OFFSET,
 		welcome_shadow_offset),
-  DECLPIXELPAIR(password.prompt.shadow.offset, PASS_PROMPT_SHADOW_OFFSET,
-		pass_prompt_shadow_offset),
-  DECLPIXELPAIR(username.prompt.shadow.offset, USER_PROMPT_SHADOW_OFFSET,
-		user_prompt_shadow_offset),
+  DECLPIXELPAIR(prompt.shadow.offset, PROMPT_SHADOW_OFFSET,
+		prompt_shadow_offset),
   DECLPIXELPAIR(password.input.size, PASS_INPUT_SIZE, password_input_size),
   DECLPIXELPAIR(username.input.size, USER_INPUT_SIZE, username_input_size),
   DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
@@ -591,19 +589,18 @@ static struct resource_spec theme_resources[] = {
   DECLCOLOR(message.shadow.color, MESSAGE_SHADOW_COLOR, message_shadow_color),
   DECLCOLOR(welcome.color, WELCOME_COLOR, welcome_color),
   DECLCOLOR(welcome.shadow.color, WELCOME_SHADOW_COLOR, welcome_shadow_color),
-  DECLCOLOR(pass.prompt.color, PASS_COLOR, pass_color),
-  DECLCOLOR(pass.prompt.shadow.color, PASS_SHADOW_COLOR, pass_shadow_color),
-  DECLCOLOR(user.prompt.color, USER_COLOR, user_color),
-  DECLCOLOR(user.prompt.shadow.color, USER_SHADOW_COLOR, user_shadow_color),
+  DECLCOLOR(prompt.color, PROMPT_COLOR, prompt_color),
+  DECLCOLOR(prompt.shadow.color, PROMPT_SHADOW_COLOR, prompt_shadow_color),
   DECLCOLOR(input.color, INPUT_COLOR, input_color),
   DECLCOLOR(input.shadow.color, INPUT_SHADOW_COLOR, input_shadow_color),
   DECLCOLOR(input.alternate.color, INPUT_ALTERNATE_COLOR,
 	    input_alternate_color),
+  DECLCOLOR(input.highlight.color, INPUT_HIGHLIGHT_COLOR,
+	    input_highlight_color),
   DECLFONT(message.font, MESSAGE_FONT, message_font),
   DECLFONT(welcome.font, WELCOME_FONT, welcome_font),
   DECLFONT(input.font, INPUT_FONT, input_font),
-  DECLFONT(password.prompt.font, PASS_FONT, pass_font),
-  DECLFONT(username.prompt.font, USER_FONT, user_font),
+  DECLFONT(prompt.font, PROMPT_FONT, prompt_font),
 };
 
 #define NUM_THEME (sizeof(theme_resources) / sizeof(struct resource_spec))
@@ -621,11 +618,11 @@ static struct resource_spec cmd_resources[] = {
 
 #define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
 
-void translate_position(struct position *posn, int width, int height,
+int translate_position(struct position *posn, int width, int height,
 		        struct cfg* cfg, int is_text)
 {
   if (posn->flags & TRANSLATION_IS_CACHED)
-    return;
+    return 0;
 
   posn->flags |= TRANSLATION_IS_CACHED;
   switch (posn->flags & HORIZ_MASK)
@@ -650,6 +647,7 @@ void translate_position(struct position *posn, int width, int height,
     posn->y += cfg->PANEL_POSITION_NAME.y;
   if (is_text)
     posn->y += height;
+  return 1;
 }
 
 
