@@ -45,8 +45,7 @@
 
 struct resource_spec {
   char *name;
-  int (*allocate)(Display *dpy, XrmDatabase db,
-		  const char *name, void *where, void *deflt);
+  int (*allocate)(Display *dpy, void *where, char *deflt);
   void (*free)(Display *dpy, void *where);
   void *default_value;
   size_t offset;
@@ -69,61 +68,39 @@ static INLINE_DECL const char *scan_to_space(const char *str)
   return str;
 }
 
-static int get_cfg_boolean(Display *dpy, XrmDatabase db, const char *name,
-			   void *valptr, void *default_value)
+static int get_cfg_boolean(Display *dpy, void *valptr, char *bool_name)
 {
-  char *type;
-  XrmValue value;
-  char *bool_name = (char *)default_value;
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    bool_name = value.addr;
-
   switch (lookup_keyword(bool_name, strlen(bool_name)))
     {
     case KEYWORD_TRUE:
       *(int *)valptr = 1;
-      break;
+      return ALLOC_STATIC;
     case KEYWORD_FALSE:
       *(int *)valptr = 0;
-      break;
-    default:
-      LogError("Invalid boolean resource %s for %s\n", value.addr, name);
-      return GET_CFG_FAIL;
+      return ALLOC_STATIC;
     }
-
-  return ALLOC_STATIC;
-}
-
-static int get_cfg_count(Display *dpy, XrmDatabase db, const char *name,
-			 void *valptr, void *default_value)
-{
-  char *type, *end;
-  XrmValue value;
-  char *num_str = (char *)default_value;
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    num_str = value.addr;
-
-  *(int *)valptr = strtol(num_str, &end, 10);
-  if (end != num_str &&
-      end - num_str == strlen(num_str) &&
-      *(int *)valptr >= 0)
-    return ALLOC_STATIC;
-
-  LogError("Invalid count resource %s for %s\n", value.addr, name);
+  
+  LogError("Invalid boolean resource %s", bool_name);
   return GET_CFG_FAIL;
 }
 
-static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
-			    void *valptr, void *default_value)
+static int get_cfg_count(Display *dpy, void *valptr, char *num_str)
 {
-  char *type;
-  XrmValue value;
+  char *end;
+
+  *(int *)valptr = strtol(num_str, &end, 10);
+  if (end != num_str && !*end && *(int *)valptr >= 0)
+    return ALLOC_STATIC;
+
+  LogError("Invalid count resource %s\n", num_str);
+  return GET_CFG_FAIL;
+}
+
+static int get_cfg_xinerama(Display *dpy, void *valptr, char *screen_name)
+{
   XineramaScreenInfo *screen_info;
   struct screen_specs *specs = (struct screen_specs *)valptr;
   int num_screens, desired_screen = 0;
-  char *desired_screen_name = (char *)default_value;
 
   int scr = DefaultScreen(dpy);
   specs->total_width = XWidthOfScreen(ScreenOfDisplay(dpy, scr));
@@ -145,13 +122,11 @@ static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
       exit(UNMANAGE_DISPLAY);
     }
 
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    desired_screen_name = value.addr;
-
   char *end;
-  int new_value = strtol(desired_screen_name, &end, 10);
-  if (desired_screen_name == end ||
-      end - desired_screen_name != strlen(desired_screen_name))
+  int new_value;
+
+  new_value = strtol(screen_name, &end, 10);
+  if (screen_name == end || *end || new_value < 0)
     LogError("Invalid Xinerama screen.  Trying screen zero.\n");
   else
     desired_screen = new_value;
@@ -175,34 +150,22 @@ static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
   return ALLOC_STATIC;
 }
 
-static int get_cfg_string(Display *dpy, XrmDatabase db, const char *name,
-			  void *valptr, void *default_value)
+static int get_cfg_string(Display *dpy, void *valptr, char *value)
 {
-  char *type;
-  XrmValue value;
-
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+  if (value)
     {
-      *(char **)valptr = (char *)default_value;
-      return ALLOC_STATIC;
+      *(char **)valptr = xstrdup(value);
+      return ALLOC_DYNAMIC;
     }
-
-  *(char **)valptr = xstrdup(value.addr);
-  return ALLOC_DYNAMIC;
+  *(char **)valptr = NULL;
+  return ALLOC_STATIC;
 }
 
-static int get_cfg_welcome(Display *dpy, XrmDatabase db, const char *name,
-			  void *valptr, void *default_value)
+static int get_cfg_welcome(Display *dpy, void *valptr, char *src_string)
 {
-  char *type;
-  XrmValue value;
-  char *src_string = (char *)default_value;
   int result_len = 1;
   char *host = NULL, *domain = NULL;
   int host_len, domain_len;
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    src_string = value.addr;
 
   char *ptr = src_string;
 
@@ -299,25 +262,17 @@ static int get_cfg_welcome(Display *dpy, XrmDatabase db, const char *name,
   return ALLOC_DYNAMIC;
 }
 
-static int get_cfg_char(Display *dpy, XrmDatabase db, const char *name,
-			  void *valptr, void *default_value)
+static int get_cfg_char(Display *dpy, void *valptr, char *value)
 {
-  char *type;
-  XrmValue value;
-
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+  if (strlen(value) != 1)
     {
-      *(char *)valptr = *(char *)default_value;
-      return ALLOC_STATIC;
+      LogError("Invalie char value: %s", value);
+      return GET_CFG_FAIL;
     }
 
-  if (value.size > 2)
-    return GET_CFG_FAIL;
-
-  *(char *)valptr = value.addr[0];
+  *(char *)valptr = value[0];
   return ALLOC_STATIC;
 }
-
 
 static void free_cfg_string(Display *dpy, void *ptr)
 {
@@ -325,17 +280,8 @@ static void free_cfg_string(Display *dpy, void *ptr)
   *(void **)ptr = NULL;
 }
 
-
-static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
-			       void *valptr, void *default_value)
+static int get_cfg_bkgnd_style(Display *dpy, void *valptr, char *style_name)
 {
-  char *type;
-  XrmValue value;
-  char *style_name = (char *)default_value;
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    style_name = value.addr;
-
   switch ((*(int *)valptr = lookup_keyword(style_name, strlen(style_name))))
     {
     case KEYWORD_TILE:
@@ -368,20 +314,11 @@ static int get_cfg_bkgnd_style(Display *dpy, XrmDatabase db, const char *name,
     result_position->COORD = scan; // Needs panel offset added at use.  
 
 static int
-get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
-			  void *valptr, void *default_value, int pixel_pair)
+get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
+			  int pixel_pair)
 {
-  char *type;
   long scan;
-  XrmValue value;
-  char *position_string = (char *)default_value;
   struct position *result_position = valptr;
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    position_string = value.addr;
-
-  if (!position_string)
-    goto bad_position;
 
   const char *str = position_string;
   char *end;
@@ -429,39 +366,29 @@ get_cfg_position_internal(Display *dpy, XrmDatabase db, const char *name,
   return ALLOC_STATIC;
 
  bad_position:
-  LogError(position_string
-	   ? "Bad position for %s: %s\n"
-	   : "No position for %s\n",
-	   name, position_string);
+  LogError("Bad position: %s\n", position_string);
   return GET_CFG_FAIL;
 }
 
-static int get_cfg_position(Display *dpy, XrmDatabase db, const char *name,
-			    void *valptr, void *default_value)
+static int get_cfg_position(Display *dpy, void *valptr, char *posn_string)
 {
-  return get_cfg_position_internal(dpy, db, name, valptr, default_value, 0);
+  return get_cfg_position_internal(dpy, valptr, posn_string, 0);
 }
 
-static int get_cfg_pixel_pair(Display *dpy, XrmDatabase db, const char *name,
-			      void *valptr, void *default_value)
+static int get_cfg_pixel_pair(Display *dpy, void *valptr, char *posn_string)
 {
-  return get_cfg_position_internal(dpy, db, name, valptr, default_value, 1);
+  return get_cfg_position_internal(dpy, valptr, posn_string, 1);
 }
-
-int j[] = {[15]=15};
 
 static int
-get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
-		 void *valptr, void *default_value)
+get_cmd_shortcut(Display *dpy, void *valptr, char *shortcut)
 {
-  char *type;
-  XrmValue value;
   struct command *cmd = valptr;
 
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+  if (!shortcut)
     return ALLOC_STATIC;
 
-  const char *str = value.addr, *end;
+  const char *str = shortcut, *end;
   while (*str)
     {
       if (!*(end = scan_to_space(str)))
@@ -492,7 +419,7 @@ get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
 	  cmd->mod_state |= Mod5Mask;
 	  break;
 	default:
-	  LogError("Bad modifier in %s: context = %s\n", name, str);
+	  LogError("Bad modifier in shortcut: context = %s\n", str);
 	  return GET_CFG_FAIL;
 	}
 
@@ -516,20 +443,13 @@ get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
 	}
     }
 
-  LogError("Bad key symbol in %s: context = %s\n", name, str);
+  LogError("Bad key symbol in shortcut: context = %s\n", str);
   return GET_CFG_FAIL;
 }
 
-static int get_cfg_font(Display *dpy, XrmDatabase db, const char *name,
-	      void *valptr, void *default_value)
+static int get_cfg_font(Display *dpy, void *valptr, char *font_name)
 {
-  char *type;
-  XrmValue value;
-  char *font_name = default_value;
   int scr = DefaultScreen(dpy);
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    font_name = value.addr;
 
   if ((*(XftFont **)valptr = XftFontOpenName(dpy, scr, font_name)))
     return ALLOC_DYNAMIC;
@@ -544,18 +464,11 @@ static void free_cfg_font(Display *dpy, void *where)
   *(XftFont **)where = NULL;
 }
 
-static int get_cfg_color(Display *dpy, XrmDatabase db, const char *name,
-	      void *valptr, void *default_value)
+static int get_cfg_color(Display *dpy, void *valptr, char *color_name)
 {
-  char *type;
-  XrmValue value;
-  char *color_name = default_value;
   int scr = DefaultScreen(dpy);
   Colormap colormap = DefaultColormap(dpy, scr);
   Visual *visual = DefaultVisual(dpy, scr);
-
-  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    color_name = value.addr;
 
   if (XftColorAllocName(dpy, visual, colormap, color_name, valptr))
     return ALLOC_DYNAMIC;
@@ -636,11 +549,14 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 
 #define DECLPOSITION(NAME, DEFAULT, PLACE)			\
   DECLSTATIC(NAME, get_cfg_position, DEFAULT_##DEFAULT, PLACE)
+
 #define DECLPIXELPAIR(NAME, DEFAULT, PLACE)				\
   DECLSTATIC(NAME, get_cfg_pixel_pair, DEFAULT_##DEFAULT, PLACE)
+
 #define DECLBOOLEAN(NAME, DEFAULT,PLACE)			\
   DECLSTATIC(NAME, get_cfg_boolean, DEFAULT_##DEFAULT, PLACE)
-#define DECLCOUNT(NAME, DEFAULT,PLACE)			\
+
+#define DECLCOUNT(NAME, DEFAULT,PLACE)				\
   DECLSTATIC(NAME, get_cfg_count, DEFAULT_##DEFAULT, PLACE)
 
 #define DECL_STRUCT cfg
@@ -659,7 +575,7 @@ static struct resource_spec cfg_resources[] = {
 	     message_duration),
   DECLSTATIC(XINERAMA_SCREEN, get_cfg_xinerama,
 	     DEFAULT_XINERAMA_SCREEN, screen_specs),
-  DECLSTATIC(RNAME_MAX_COMMANDS, get_cfg_count, DEFAULT_COMMAND_COUNT,
+  DECLSTATIC(MAX_COMMANDS, get_cfg_count, DEFAULT_COMMAND_COUNT,
 	     command_count),
   DECLSTRING(PASS_PROMPT, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(USER_PROMPT, DEFAULT_USER_PROMPT, username_prompt),
@@ -741,8 +657,8 @@ int translate_position(struct position *posn, int width, int height,
 {
   if (posn->flags & TRANSLATION_IS_CACHED)
     return 0;
-
   posn->flags |= TRANSLATION_IS_CACHED;
+
   switch (posn->flags & HORIZ_MASK)
     {
     case PUT_LEFT:
@@ -810,9 +726,14 @@ static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
   spec = theme_resources;
   for (int i = 0; i < NUM_THEME ; i++, spec++)
     {
+      char *type, *param;
+      XrmValue value;
+
       strcpy(&name[sizeof(THEME_RESOURCE_PREFIX)-1], spec->name);
-      switch ((spec->allocate)(dpy, db, name, (char *)cfg + spec->offset,
-			       spec->default_value))
+      param = !XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
+	? spec->default_value
+	: value.addr;
+      switch ((spec->allocate)(dpy, (char *)cfg + spec->offset, param))
 	{
 	case GET_CFG_FAIL:
 	  LogError("Invalid parameter: %s\n", name);
@@ -862,16 +783,14 @@ static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
 
 struct cfg *get_cfg(Display *dpy)
 {
+  char *type, *param;
+  XrmValue value;
   XrmDatabase db;
   char *theme_dir, *themes;
   static char name[48];
 
-#if defined(TESTCFG) || !defined(REALRM)
-  db = XrmGetFileDatabase("gleem.conf");
-#else
   char *RMString = XResourceManagerString(dpy);
   db = XrmGetStringDatabase(RMString ? RMString : "");
-#endif
 
   memset(&cfg, 0, sizeof(cfg));
   strcpy(name, MAIN_RESOURCE_PREFIX);
@@ -879,23 +798,33 @@ struct cfg *get_cfg(Display *dpy)
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
       strcpy(&name[sizeof(MAIN_RESOURCE_PREFIX)-1], spec->name);
-      switch ((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
-			       spec->default_value))
+      param = !XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
+	? spec->default_value
+	: value.addr;
+      switch ((spec->allocate)(dpy, (char *)&cfg + spec->offset, param))
 	{
 	case GET_CFG_FAIL:
+	  LogError("Bad parameter: %s\n", name);
 	  exit(UNMANAGE_DISPLAY);
 	case ALLOC_DYNAMIC:
 	  *(int *)((char *)&cfg + spec->allocated) = 1;
 	}
     }
   cfg.current_session = cfg.sessions;
-  get_cfg_string(dpy, db,
-		 MAIN_RESOURCE_PREFIX STRINGIFY(RNAME_THEME_DIRECTORY),
-		 &theme_dir, xstrdup(DEFAULT_THEME_DIRECTORY));
-  get_cfg_string(dpy, db,
-		 MAIN_RESOURCE_PREFIX STRINGIFY(RNAME_THEME_SELECTION),
-		 &themes, xstrdup(DEFAULT_THEME_SELECTION));
-
+  theme_dir =
+    xstrdup(XrmGetResource(db,
+			   MAIN_RESOURCE_PREFIX
+			   STRINGIFY(RNAME_THEME_DIRECTORY),
+			   DUMMY_RESOURCE_CLASS, &type, &value)
+	    ? value.addr
+	    : DEFAULT_THEME_DIRECTORY);
+  themes =
+    xstrdup(XrmGetResource(db,
+			   MAIN_RESOURCE_PREFIX
+			   STRINGIFY(RNAME_THEME_SELECTION),
+			   DUMMY_RESOURCE_CLASS, &type, &value)
+	    ? value.addr
+	    : DEFAULT_THEME_SELECTION);
   if (cfg.command_count < MIN_COMMANDS)
     cfg.command_count = MIN_COMMANDS;
   else if (cfg.command_count > MAX_COMMANDS)
@@ -916,8 +845,11 @@ struct cfg *get_cfg(Display *dpy)
       for (int i = 0; i < NUM_CMD ; i++, spec++)
 	{
 	  strcpy(rest_of_name, spec->name);
-	  switch ((spec->allocate)(dpy, db, name, (char *)cmd + spec->offset,
-				   spec->default_value))
+	  param =
+	    !XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
+	    ? spec->default_value
+	    : value.addr;
+	  switch ((spec->allocate)(dpy, (char *)cmd + spec->offset, param))
 	    {
 	    case GET_CFG_FAIL:
 	      exit(UNMANAGE_DISPLAY);
@@ -961,7 +893,7 @@ struct cfg *get_cfg(Display *dpy)
   free(themes);
   return &cfg;
 }
-
+  
 void release_cfg(Display *dpy, struct cfg *cfg)
 {
   struct resource_spec *spec = cfg_resources;
@@ -988,15 +920,3 @@ void release_cfg(Display *dpy, struct cfg *cfg)
 
   free(cfg->commands);
 }
-
-#ifdef TESTCFG
-int main(int argc, char *argv[])
-{
-  Display *dpy = XOpenDisplay(NULL);
-
-  if (dpy)
-    get_cfg(dpy);
-  
-  return 0;
-}
-#endif

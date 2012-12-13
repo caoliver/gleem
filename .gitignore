@@ -7,7 +7,5 @@ slim/*
 *.png
 *.jpg
 *.jpeg
-background
-panel
 *~
 *.o

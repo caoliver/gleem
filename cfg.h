@@ -24,7 +24,6 @@
 #define RNAME_USER_PROMPT username.prompt.string
 
 
-
 // Command resources
 
 #define COMMAND_RESOURCE_PREFIX MAIN_RESOURCE_PREFIX "command."

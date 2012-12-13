@@ -224,10 +224,8 @@ void do_stuff()
   cfg = get_cfg(dpy);
   scr = DefaultScreen(dpy);
   rootid = RootWindow(dpy, scr);
-#ifndef NOZEP  
   XSetWindowBackground(dpy, rootid, BlackPixel(dpy, DefaultScreen(dpy)));
   XClearWindow(dpy, rootid);
-#endif
   wid = XCreateSimpleWindow(dpy, rootid,
 			    cfg->screen_specs.xoffset,
 			    cfg->screen_specs.yoffset,
@@ -286,9 +284,7 @@ void do_stuff()
   struct pollfd pfd = {0};
   pfd.fd = ConnectionNumber(dpy);
   pfd.events = POLLIN;
-#ifndef NOZEP
   XGrabKeyboard(dpy, pwid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
-#endif
   int is_secret = 0;
 
   int again = 1;
@@ -410,10 +406,8 @@ void do_stuff()
 
 int main(int argc, char *argv[])
 {
-#ifndef NOZEP
   if (!strcmp(getenv("DISPLAY"), ":0"))
     errx(1, "Please use Xephyr");
-#endif
   do_stuff();
   return 0;
 }
