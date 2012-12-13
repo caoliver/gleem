@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <X11/Xlib.h>
@@ -7,10 +8,11 @@
 #include <X11/extensions/Xinerama.h>
 #include <stddef.h>
 #include <ctype.h>
+#include <errno.h>
+#include <time.h>
 #include "util.h"
 #include "keywords.h"
 #include "image.h"
-#include "defaults.h"
 #include "cfg.h"
 
 #if __STDC_VERSION__ >= 199901L
@@ -30,10 +32,6 @@
 #define ALLOC_STATIC 0
 #define ALLOC_DYNAMIC 1
 #define GET_CFG_FAIL -1
-
-#define MAIN_PREFIX "gleem."
-#define COMMAND_PREFIX MAIN_PREFIX "command."
-#define THEME_PREFIX ""
 
 #define X_IS_PANEL_COORD 2
 #define Y_IS_PANEL_COORD 4
@@ -102,16 +100,14 @@ static int get_cfg_count(Display *dpy, XrmDatabase db, const char *name,
 {
   char *type, *end;
   XrmValue value;
+  char *num_str = (char *)default_value;
 
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    {
-      *(int *)valptr = *(int *)default_value;
-      return ALLOC_STATIC;
-    }
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    num_str = value.addr;
 
-  *(int *)valptr = strtol(value.addr, &end, 10);
-  if (end != value.addr &&
-      end - value.addr == value.size - 1 &&
+  *(int *)valptr = strtol(num_str, &end, 10);
+  if (end != num_str &&
+      end - num_str == strlen(num_str) &&
       *(int *)valptr >= 0)
     return ALLOC_STATIC;
 
@@ -126,7 +122,8 @@ static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
   XrmValue value;
   XineramaScreenInfo *screen_info;
   struct screen_specs *specs = (struct screen_specs *)valptr;
-  int num_screens, desired_screen = *(int *)default_value;
+  int num_screens, desired_screen = 0;
+  char *desired_screen_name = (char *)default_value;
 
   int scr = DefaultScreen(dpy);
   specs->total_width = XWidthOfScreen(ScreenOfDisplay(dpy, scr));
@@ -149,14 +146,15 @@ static int get_cfg_xinerama(Display *dpy, XrmDatabase db, const char *name,
     }
 
   if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    {
-      char *end;
-      int new_value = strtol(value.addr, &end, 10);
-      if (value.addr == end || end - value.addr != value.size - 1)
-	LogError("Invalid Xinerama screen.  Using default.\n");
-      else
-	desired_screen = new_value;
-    }
+    desired_screen_name = value.addr;
+
+  char *end;
+  int new_value = strtol(desired_screen_name, &end, 10);
+  if (desired_screen_name == end ||
+      end - desired_screen_name != strlen(desired_screen_name))
+    LogError("Invalid Xinerama screen.  Trying screen zero.\n");
+  else
+    desired_screen = new_value;
 
   int i;
   for (i = 0; i < num_screens; i++)
@@ -190,6 +188,114 @@ static int get_cfg_string(Display *dpy, XrmDatabase db, const char *name,
     }
 
   *(char **)valptr = xstrdup(value.addr);
+  return ALLOC_DYNAMIC;
+}
+
+static int get_cfg_welcome(Display *dpy, XrmDatabase db, const char *name,
+			  void *valptr, void *default_value)
+{
+  char *type;
+  XrmValue value;
+  char *src_string = (char *)default_value;
+  int result_len = 1;
+  char *host = NULL, *domain = NULL;
+  int host_len, domain_len;
+
+  if (XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
+    src_string = value.addr;
+
+  char *ptr = src_string;
+
+  while (*ptr)
+    {
+      if (*ptr == '~')
+	switch (*++ptr)
+	  {
+	  case 'h':
+	    if (!host)
+	      {
+		int size = sysconf(_SC_HOST_NAME_MAX) + 1;
+		host = xmalloc(size);
+		if (gethostname(host, size) == -1)
+		  {
+		    LogError("gethostname failed: %s\n", strerror(errno));
+		    exit(UNMANAGE_DISPLAY);
+		  }
+		host_len = strlen(host);
+		result_len += host_len;
+	      }
+	    break;
+	  case 'd':
+	    if (!domain)
+	      {
+		int size = sysconf(_SC_HOST_NAME_MAX) + 2;
+		domain = xmalloc(size);
+		domain[0] = '.';
+		if (getdomainname(&domain[1], size) == -1)
+		  {
+		    LogError("getdomainname failed: %s\n", strerror(errno));
+		    exit(UNMANAGE_DISPLAY);
+		  }
+		domain_len =
+		  domain[1] && strcmp(&domain[1], "(none)")
+		  ? strlen(domain)
+		  : 0;
+		result_len += domain_len;
+	      }
+	    break;
+	  case '~':
+	    result_len++;
+	    break;
+	  default:
+	    LogError(isprint(*ptr)
+		     ? "Bad string escape in welcome message: ~%c\n"
+		     : "Bad string escape in welcome message: ~0x%02x\n",
+		     0x0FF & *ptr);
+	    return GET_CFG_FAIL;
+	  }
+      else
+	result_len++;
+
+      ptr++;
+    }
+
+  char *result_str = xmalloc(result_len);
+  char *dst = result_str;
+
+  ptr = src_string;
+
+  while (*ptr)
+    {
+      if (*ptr == '~')
+	switch (*++ptr)
+	  {
+	  case 'h':
+	    strcpy(dst, host);
+	    dst += host_len;
+	    break;
+	  case 'd':
+	    if (!domain_len)
+	      break;
+	    strcpy(dst, domain);
+	    dst += domain_len;
+	    break;
+	  case '~':
+	    *dst++ = *ptr;
+	    result_len++;
+	    break;
+	  }
+      else
+	{
+	  result_len++;
+	  *dst++ = *ptr;
+	}
+
+      ptr++;
+    }
+
+  *dst = '\0';
+  *(char **)valptr = result_str;
+
   return ALLOC_DYNAMIC;
 }
 
@@ -341,6 +447,8 @@ static int get_cfg_pixel_pair(Display *dpy, XrmDatabase db, const char *name,
 {
   return get_cfg_position_internal(dpy, db, name, valptr, default_value, 1);
 }
+
+int j[] = {[15]=15};
 
 static int
 get_cmd_shortcut(Display *dpy, XrmDatabase db, const char *name,
@@ -502,18 +610,16 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
   return ALLOC_STATIC;
 }
 
-int Zero = 0;
-
-int default_message_duration = DEFAULT_MESSAGE_DURATION;
-int default_command_count = DEFAULT_COMMAND_COUNT;
+#define STRINGIFY_HELPER(SYMBOL) #SYMBOL
+#define STRINGIFY(SYMBOL) STRINGIFY_HELPER(SYMBOL)
 
 #define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
-  {   #NAME,						\
+  {   STRINGIFY(RNAME_ ## NAME),				\
       ALLOC, NULL,					\
       DEFAULT, offsetof(struct DECL_STRUCT, FIELD), 0 }
 
 #define DECLDYNAMIC(NAME, ALLOC, FREE, DEFAULT, FIELD)	\
-  {   #NAME,						\
+  {   STRINGIFY(RNAME_ ## NAME),				\
       ALLOC, FREE,					\
       DEFAULT,						\
       offsetof(struct DECL_STRUCT, FIELD),		\
@@ -534,78 +640,85 @@ int default_command_count = DEFAULT_COMMAND_COUNT;
   DECLSTATIC(NAME, get_cfg_pixel_pair, DEFAULT_##DEFAULT, PLACE)
 #define DECLBOOLEAN(NAME, DEFAULT,PLACE)			\
   DECLSTATIC(NAME, get_cfg_boolean, DEFAULT_##DEFAULT, PLACE)
+#define DECLCOUNT(NAME, DEFAULT,PLACE)			\
+  DECLSTATIC(NAME, get_cfg_count, DEFAULT_##DEFAULT, PLACE)
 
 #define DECL_STRUCT cfg
 
 static struct resource_spec cfg_resources[] = {
-  DECLBOOLEAN(ignore-capslock, IGNORE_CAPSLOCK, ignore_capslock),
-  DECLBOOLEAN(numlock, NUMLOCK, numlock),
-  DECLBOOLEAN(hide-mouse, HIDE_MOUSE, hide_mouse),
-  DECLBOOLEAN(auto-login, AUTO_LOGIN, auto_login),
-  DECLBOOLEAN(focus-password, FOCUS_PASSWORD, auto_login),
-  DECLSTRING(default-user, NULL, default_user),
-  DECLSTRING(welcome-message, DEFAULT_WELCOME_MESSAGE, welcome_message),
-  DECLSTRING(sessions, NULL, sessions),
-  DECLSTATIC(message-duration, get_cfg_count, &default_message_duration,
+  DECLBOOLEAN(IGNORE_CAPSLOCK, IGNORE_CAPSLOCK, ignore_capslock),
+  DECLBOOLEAN(NUMLOCK, NUMLOCK, numlock),
+  DECLBOOLEAN(HIDE_MOUSE, HIDE_MOUSE, hide_mouse),
+  DECLBOOLEAN(AUTO_LOGIN, AUTO_LOGIN, auto_login),
+  DECLBOOLEAN(FOCUS_PASSWORD, FOCUS_PASSWORD, auto_login),
+  DECLSTRING(DEFAULT_USER, NULL, default_user),
+  DECLDYNAMIC(WELCOME_MESSAGE, get_cfg_welcome,  free_cfg_string,
+	      DEFAULT_WELCOME_MESSAGE, welcome_message),
+  DECLSTRING(SESSIONS, DEFAULT_SESSIONS, sessions),
+  DECLSTATIC(MESSAGE_DURATION, get_cfg_count, DEFAULT_MESSAGE_DURATION,
 	     message_duration),
-  DECLSTATIC(xinerama-screen, get_cfg_xinerama, &Zero, screen_specs),
-  DECLSTATIC(command.scan-to, get_cfg_count, &default_command_count,
+  DECLSTATIC(XINERAMA_SCREEN, get_cfg_xinerama,
+	     DEFAULT_XINERAMA_SCREEN, screen_specs),
+  DECLSTATIC(RNAME_MAX_COMMANDS, get_cfg_count, DEFAULT_COMMAND_COUNT,
 	     command_count),
+  DECLSTRING(PASS_PROMPT, DEFAULT_PASS_PROMPT, password_prompt),
+  DECLSTRING(USER_PROMPT, DEFAULT_USER_PROMPT, username_prompt),
 };
 
 #define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
 
 static struct resource_spec theme_resources[] = {
-  DECLPOSITION(panel.position, PANEL_POSN, PANEL_POSITION_NAME),
-  DECLPOSITION(message.position, MESSAGE_POSN, message_position),
-  DECLPOSITION(welcome.position, WELCOME_POSN, welcome_position),
-  DECLPOSITION(password.prompt.position, PASS_PROMPT_POSN,
+  DECLPOSITION(PANEL_POSITION, PANEL_POSN, panel_position),
+  DECLPOSITION(MESSAGE_POSITION, MESSAGE_POSN, message_position),
+  DECLPOSITION(WELCOME_POSITION, WELCOME_POSN, welcome_position),
+  DECLPOSITION(PASSWORD_PROMPT_POSITION, PASS_PROMPT_POSN,
 	       password_prompt_position),
-  DECLPOSITION(password.input.position, PASS_INPUT_POSN,
+  DECLPOSITION(PASSWORD_INPUT_POSITION, PASS_INPUT_POSN,
 	       password_input_position),
-  DECLPOSITION(username.prompt.position, USER_PROMPT_POSN,
+  DECLPOSITION(USERNAME_PROMPT_POSITION, USER_PROMPT_POSN,
 	       username_prompt_position),
-  DECLPOSITION(username.input.position, USER_INPUT_POSN,
+  DECLPOSITION(USERNAME_INPUT_POSITION, USER_INPUT_POSN,
 	       username_input_position),
-  DECLPIXELPAIR(message.shadow.offset, MESSAGE_SHADOW_OFFSET,
+  DECLPIXELPAIR(MESSAGE_SHADOW_OFFSET, MESSAGE_SHADOW_OFFSET,
 		message_shadow_offset),
-  DECLPIXELPAIR(input.shadow.offset, INPUT_SHADOW_OFFSET,
+  DECLPIXELPAIR(INPUT_SHADOW_OFFSET, INPUT_SHADOW_OFFSET,
 		input_shadow_offset),
-  DECLPIXELPAIR(welcome.shadow.offset, WELCOME_SHADOW_OFFSET,
+  DECLPIXELPAIR(WELCOME_SHADOW_OFFSET, WELCOME_SHADOW_OFFSET,
 		welcome_shadow_offset),
-  DECLPIXELPAIR(prompt.shadow.offset, PROMPT_SHADOW_OFFSET,
+  DECLPIXELPAIR(PROMPT_SHADOW_OFFSET, PROMPT_SHADOW_OFFSET,
 		prompt_shadow_offset),
-  DECLPIXELPAIR(password.input.size, PASS_INPUT_SIZE, password_input_size),
-  DECLPIXELPAIR(username.input.size, USER_INPUT_SIZE, username_input_size),
-  DECLSTATIC(background-style, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
-	     background_style),
-  DECLSTATIC(password.input.display, get_cfg_char, DEFAULT_PASS_MASK,
-	     password_mask),
-  DECLBOOLEAN(cursor.blink, CURSOR_BLINK, cursor_blink),
-  DECLBOOLEAN(input.highlight, INPUT_HIGHLIGHT, input_highlight),
-  DECLSTRING(background.file, NULL, background_filename),
-  DECLSTRING(panel.file, NULL, panel_filename),
-  DECLSTRING(password.prompt.string, DEFAULT_PASS_PROMPT, password_prompt),
-  DECLSTRING(username.prompt.string, DEFAULT_USER_PROMPT, username_prompt),
-  DECLCOLOR(cursor.color, CURSOR_COLOR, cursor_color),
-  DECLCOLOR(background.color, BKGND_COLOR, background_color),
-  DECLCOLOR(panel.color, PANEL_COLOR, panel_color),
-  DECLCOLOR(message.color, MESSAGE_COLOR, message_color),
-  DECLCOLOR(message.shadow.color, MESSAGE_SHADOW_COLOR, message_shadow_color),
-  DECLCOLOR(welcome.color, WELCOME_COLOR, welcome_color),
-  DECLCOLOR(welcome.shadow.color, WELCOME_SHADOW_COLOR, welcome_shadow_color),
-  DECLCOLOR(prompt.color, PROMPT_COLOR, prompt_color),
-  DECLCOLOR(prompt.shadow.color, PROMPT_SHADOW_COLOR, prompt_shadow_color),
-  DECLCOLOR(input.color, INPUT_COLOR, input_color),
-  DECLCOLOR(input.shadow.color, INPUT_SHADOW_COLOR, input_shadow_color),
-  DECLCOLOR(input.alternate.color, INPUT_ALTERNATE_COLOR,
+  DECLPIXELPAIR(CURSOR_SIZE, CURSOR_SIZE, cursor_size),
+  DECLCOLOR(CURSOR_COLOR, CURSOR_COLOR, cursor_color),
+  DECLCOLOR(BACKGROUND_COLOR, BKGND_COLOR, background_color),
+  DECLCOLOR(PANEL_COLOR, PANEL_COLOR, panel_color),
+  DECLCOLOR(MESSAGE_COLOR, MESSAGE_COLOR, message_color),
+  DECLCOLOR(MESSAGE_SHADOW_COLOR, MESSAGE_SHADOW_COLOR, message_shadow_color),
+  DECLCOLOR(WELCOME_COLOR, WELCOME_COLOR, welcome_color),
+  DECLCOLOR(WELCOME_SHADOW_COLOR, WELCOME_SHADOW_COLOR, welcome_shadow_color),
+  DECLCOLOR(PROMPT_COLOR, PROMPT_COLOR, prompt_color),
+  DECLCOLOR(PROMPT_SHADOW_COLOR, PROMPT_SHADOW_COLOR, prompt_shadow_color),
+  DECLCOLOR(INPUT_COLOR, INPUT_COLOR, input_color),
+  DECLCOLOR(INPUT_SHADOW_COLOR, INPUT_SHADOW_COLOR, input_shadow_color),
+  DECLCOLOR(INPUT_ALTERNATE_COLOR, INPUT_ALTERNATE_COLOR,
 	    input_alternate_color),
-  DECLCOLOR(input.highlight.color, INPUT_HIGHLIGHT_COLOR,
+  DECLCOLOR(INPUT_HIGHLIGHT_COLOR, INPUT_HIGHLIGHT_COLOR,
 	    input_highlight_color),
-  DECLFONT(message.font, MESSAGE_FONT, message_font),
-  DECLFONT(welcome.font, WELCOME_FONT, welcome_font),
-  DECLFONT(input.font, INPUT_FONT, input_font),
-  DECLFONT(prompt.font, PROMPT_FONT, prompt_font),
+  DECLFONT(MESSAGE_FONT, MESSAGE_FONT, message_font),
+  DECLFONT(WELCOME_FONT, WELCOME_FONT, welcome_font),
+  DECLFONT(INPUT_FONT, INPUT_FONT, input_font),
+  DECLFONT(PROMPT_FONT, PROMPT_FONT, prompt_font),
+  DECLSTRING(BACKGROUND_FILE, NULL, background_filename),
+  DECLSTRING(PANEL_FILE , NULL, panel_filename),
+  DECLBOOLEAN(CURSOR_BLINK, CURSOR_BLINK, cursor_blink),
+  DECLBOOLEAN(INPUT_HIGHLIGHT, INPUT_HIGHLIGHT, input_highlight),
+  DECLCOUNT(CURSOR_OFFSET, CURSOR_OFFSET, cursor_offset),
+  DECLCOUNT(PASSWORD_INPUT_WIDTH, PASS_INPUT_WIDTH, password_input_width),
+  DECLCOUNT(USERNAME_INPUT_WIDTH, USER_INPUT_WIDTH, username_input_width),
+  DECLCOUNT(INPUT_HEIGHT, INPUT_HEIGHT, input_height),
+  DECLSTATIC(BACKGROUND_STYLE, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
+	     background_style),
+  DECLSTATIC(PASS_DISPLAY, get_cfg_char, DEFAULT_PASS_MASK,
+	     password_mask),
 };
 
 #define NUM_THEME (sizeof(theme_resources) / sizeof(struct resource_spec))
@@ -614,11 +727,11 @@ static struct resource_spec theme_resources[] = {
 #define DECL_STRUCT command
 
 static struct resource_spec cmd_resources[] = {
-  { "shortcut", get_cmd_shortcut, NULL, NULL, 0, 0 },
-  DECLSTATIC(delay, get_cfg_count, &Zero, delay),
-  DECLSTRING(name, NULL, name),
-  DECLSTRING(message, NULL, message),
-  DECLSTRING(users, NULL, allowed_users),
+  { STRINGIFY(RNAME_CMD_SHORTCUT), get_cmd_shortcut, NULL, NULL, 0, 0 },
+  DECLSTATIC(CMD_DELAY, get_cfg_count, DEFAULT_EXEC_DELAY, delay),
+  DECLSTRING(CMD_NAME, NULL, name),
+  DECLSTRING(CMD_MESSAGE, NULL, message),
+  DECLSTRING(CMD_USERS, NULL, allowed_users),
 };
 
 #define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
@@ -639,7 +752,7 @@ int translate_position(struct position *posn, int width, int height,
       posn->x -= width / 2;
     }
   if (posn->flags & X_IS_PANEL_COORD)
-    posn->x += cfg->PANEL_POSITION_NAME.x;
+    posn->x += cfg->panel_position.x;
   switch (posn->flags & VERT_MASK)
     {
     case PUT_ABOVE:
@@ -649,7 +762,7 @@ int translate_position(struct position *posn, int width, int height,
       posn->y -= height / 2;
     }
   if (posn->flags & Y_IS_PANEL_COORD)
-    posn->y += cfg->PANEL_POSITION_NAME.y;
+    posn->y += cfg->panel_position.y;
   if (is_text)
     posn->y += height;
   return 1;
@@ -669,57 +782,66 @@ static void free_theme_resources(Display *dpy, struct cfg *cfg)
 }
 
 
+
 static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
 {
   XrmDatabase db;
   int rc = 0;
-  char *olddir = realpath(".", NULL);
   char name[48];
   struct resource_spec *spec;
-
-  if (!olddir)
-    out_of_memory();
+  char *filepath = NULL;
 
   if (theme_path)
     {
-      if (chdir(theme_path))
-	goto bugout;
-      if (!(db = XrmGetFileDatabase(THEME_FILE_NAME)))
-	goto bugout;
+      char *dbname = mkfilepath(2, theme_path, THEME_FILE_NAME);
+      db = XrmGetFileDatabase(dbname);
+      free(dbname);
+      if (!db)
+	{
+	  LogError("Can't read theme file!\n");
+	  goto bugout;
+	}
     }
   else
     // Use compiled-in defaults.
     db = XrmGetStringDatabase("");
 
-  strcpy(name, THEME_PREFIX);
+  strcpy(name, THEME_RESOURCE_PREFIX);
   spec = theme_resources;
   for (int i = 0; i < NUM_THEME ; i++, spec++)
     {
-      strcpy(&name[sizeof(THEME_PREFIX)-1], spec->name);
+      strcpy(&name[sizeof(THEME_RESOURCE_PREFIX)-1], spec->name);
       switch ((spec->allocate)(dpy, db, name, (char *)cfg + spec->offset,
-			  spec->default_value))
+			       spec->default_value))
 	{
 	case GET_CFG_FAIL:
-	  free_theme_resources(dpy, cfg);
+	  LogError("Invalid parameter: %s\n", name);
 	  goto bugout;
-	  break;
 	case ALLOC_DYNAMIC:
 	  *(int *)((char *)cfg + spec->allocated) = 1;
 	}
     }
 
-  if (cfg->panel_filename
-      && !read_image(cfg->panel_filename, &cfg->panel_image))
-    goto bugout;
-
-  if (cfg->background_filename
-      && !read_image(cfg->background_filename, &cfg->background_image))
-    goto bugout;
-
-  if (chdir(olddir))
+  if (cfg->panel_filename)
     {
-      LogError("Bad chdir");
-      exit(UNMANAGE_DISPLAY);
+      filepath = mkfilepath(2, theme_path, cfg->panel_filename);
+      if (!read_image(filepath, &cfg->panel_image))
+	{
+	  LogError("Missing panel image: %s\n", filepath);
+	  goto bugout;
+	}
+    }
+
+  if (cfg->background_filename)
+    {
+      free(filepath);
+      filepath = mkfilepath(2, theme_path, cfg->background_filename);
+
+      if (!read_image(filepath, &cfg->background_image))
+	{
+	  LogError("Missing background image: %s\n", filepath);
+	  goto bugout;
+	}
     }
 
   XrmDestroyDatabase(db);
@@ -728,10 +850,12 @@ static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
   goto done;
 
  bugout:
-  LogError("Bad theme %s\n", theme_path);
+  free_theme_resources(dpy, cfg);
+  LogError("Bad theme: %s\n", theme_path);
 
  done:
-  free(olddir);
+  if (filepath)
+    free(filepath);
   return rc;
 }
 
@@ -739,10 +863,10 @@ static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
 struct cfg *get_cfg(Display *dpy)
 {
   XrmDatabase db;
-  char *theme_directory, *themes;
+  char *theme_dir, *themes;
   static char name[48];
 
-#if defined(TESTCFG) || !defined(NOZEP)
+#if defined(TESTCFG) || !defined(REALRM)
   db = XrmGetFileDatabase("gleem.conf");
 #else
   char *RMString = XResourceManagerString(dpy);
@@ -750,11 +874,11 @@ struct cfg *get_cfg(Display *dpy)
 #endif
 
   memset(&cfg, 0, sizeof(cfg));
-  strcpy(name, MAIN_PREFIX);
+  strcpy(name, MAIN_RESOURCE_PREFIX);
   struct resource_spec *spec = cfg_resources;
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
-      strcpy(&name[sizeof(MAIN_PREFIX)-1], spec->name);
+      strcpy(&name[sizeof(MAIN_RESOURCE_PREFIX)-1], spec->name);
       switch ((spec->allocate)(dpy, db, name, (char *)&cfg + spec->offset,
 			       spec->default_value))
 	{
@@ -765,22 +889,24 @@ struct cfg *get_cfg(Display *dpy)
 	}
     }
   cfg.current_session = cfg.sessions;
-  get_cfg_string(dpy, db, MAIN_PREFIX "theme-directory",
-		 &theme_directory, xstrdup("./themes"));
-  get_cfg_string(dpy, db, MAIN_PREFIX "current-theme", &themes,
-		 xstrdup("default"));
+  get_cfg_string(dpy, db,
+		 MAIN_RESOURCE_PREFIX STRINGIFY(RNAME_THEME_DIRECTORY),
+		 &theme_dir, xstrdup(DEFAULT_THEME_DIRECTORY));
+  get_cfg_string(dpy, db,
+		 MAIN_RESOURCE_PREFIX STRINGIFY(RNAME_THEME_SELECTION),
+		 &themes, xstrdup(DEFAULT_THEME_SELECTION));
 
-  if (cfg.command_count < 16)
-    cfg.command_count = 16;
-  else if (cfg.command_count > 100)
-    cfg.command_count = 100;
+  if (cfg.command_count < MIN_COMMANDS)
+    cfg.command_count = MIN_COMMANDS;
+  else if (cfg.command_count > MAX_COMMANDS)
+    cfg.command_count = MAX_COMMANDS;
   cfg.commands = xcalloc(sizeof(struct command), cfg.command_count);
 
-  strcpy(name, COMMAND_PREFIX);
+  strcpy(name, COMMAND_RESOURCE_PREFIX);
   for (int cmd_id = 0; cmd_id < cfg.command_count; cmd_id++)
     {
       struct command *cmd = &cfg.commands[cmd_id];
-      char *rest_of_name = &name[sizeof(COMMAND_PREFIX)-1];
+      char *rest_of_name = &name[sizeof(COMMAND_RESOURCE_PREFIX)-1];
       rest_of_name += sprintf(rest_of_name, "%d.", cmd_id + 1);
       strcpy(rest_of_name, "action");
       get_cmd_action(db, name, cmd);
@@ -803,11 +929,35 @@ struct cfg *get_cfg(Display *dpy)
 
   XrmDestroyDatabase(db);
 
-  // Find random theme here.
+  char *theme_list[MAX_THEMES];
+  int theme_count = break_tokens(themes, theme_list, MAX_THEMES);  
 
-  get_theme(dpy, &cfg, ("themes",NULL));
+  srandom((int)(time(NULL)));
 
-  free(theme_directory);
+  while (theme_count)
+    {
+      int theme_number = random() % theme_count;
+      char *theme_path = mkfilepath(2, theme_dir, theme_list[theme_number]);
+      int success = get_theme(dpy, &cfg, theme_path);
+      free(theme_path);
+      if (success)
+	break;
+      theme_list[theme_number] = theme_list[--theme_count];
+    }
+
+  if (!theme_count)
+    {
+      char *theme_path = mkfilepath(2, theme_dir, DEFAULT_THEME_SELECTION);
+      int success = get_theme(dpy, &cfg, theme_path);
+      free(theme_path);
+      if (!success && !get_theme(dpy, &cfg, NULL))
+	{
+	  LogError("Wow!  Internal theme is bad.\n");
+	  exit(UNMANAGE_DISPLAY);
+	}
+    }
+
+  free(theme_dir);
   free(themes);
   return &cfg;
 }
