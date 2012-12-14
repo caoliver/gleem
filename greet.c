@@ -56,7 +56,7 @@ pam_handle_t **(*__xdm_thepamhp)(void) = NULL;
 # endif
 
 
-static Display *InitGreet(struct display *d, struct image *background)
+static Display *InitGreet(struct display *d)
 {
   Display *dpy;
 
@@ -83,9 +83,8 @@ greet_user_rtn GreetUser(
     struct dlfuncs        *dlfuncs)
 
 {
-    struct image background, panel;
     int scr;
-    Window root_win, panel_win;
+    Window root_win, background_win, panel_win;
     Pixmap pixmap;
     static Display *dpy;
     struct cfg *cfg;
@@ -135,7 +134,7 @@ greet_user_rtn GreetUser(
     __xdm_thepamhp = dlfuncs->_thepamhp;
 # endif
 
-    if (!(dpy = InitGreet(d, &background)))
+    if (!(dpy = InitGreet(d)))
       {
 	LogError ("Cannot reopen display %s for greet window\n", d->name);
         exit (RESERVER_DISPLAY);
@@ -143,29 +142,55 @@ greet_user_rtn GreetUser(
 
     scr = DefaultScreen(dpy);
     
-    cfg = read_cfg(dpy);
+    cfg = get_cfg(dpy);
+
+    root_win = RootWindow(dpy, scr);
+    XSetWindowBackground(dpy, root_win, BlackPixel(dpy, DefaultScreen(dpy)));
+    XClearWindow(dpy, root_win);
+    background_win = XCreateSimpleWindow(dpy, root_win,
+					 cfg->screen_specs.xoffset,
+					 cfg->screen_specs.yoffset,
+					 cfg->screen_specs.width,
+					 cfg->screen_specs.height,
+					 0, 0, 255);
+    if (cfg->background_image.width > 0)
+      resize_background(&cfg->background_image, cfg->screen_specs.width,
+			cfg->screen_specs.height);
+    else
+      frame_background(&cfg->background_image,
+		       cfg->screen_specs.width, cfg->screen_specs.height,
+		       cfg->screen_specs.width + 1, 0, &cfg->background_color);
+    pixmap = imageToPixmap(dpy, &cfg->background_image, scr, background_win);
+    XSetWindowBackgroundPixmap(dpy, background_win, pixmap);
+    XClearWindow(dpy, background_win);
+    XFreePixmap(dpy, pixmap);
 
     // Trial junk below here.
 
-    read_image("/root/gleem/background.jpg", &background);
-    resize_background(&background,
-		      WidthOfScreen(ScreenOfDisplay(dpy, scr)),
-		      HeightOfScreen(ScreenOfDisplay(dpy, scr)));
-    root_win = RootWindow(dpy, scr);
-    pixmap = imageToPixmap(dpy, &background, scr, root_win);
-    XSetWindowBackgroundPixmap(dpy, root_win, pixmap);
-    XFreePixmap(dpy, pixmap);
-    XClearWindow(dpy,root_win);
-    panel_win = XCreateSimpleWindow(dpy, root_win,
-    				   50, 500, 587, 235, 0, 0, 255);
-    read_image("/root/gleem/panel.png", &panel);
-    merge_with_background(&panel, &background, 50, 050);
-    free_image_buffers(&background);
-    pixmap = imageToPixmap(dpy, &panel, scr, panel_win);
-    free_image_buffers(&panel);
+    if (cfg->panel_image.width == 0)
+      {
+	cfg->input_highlight = 1;
+	frame_background(&cfg->panel_image,
+			 DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT,
+			 cfg->screen_specs.width + 1, 0, &cfg->panel_color);
+      }
+    TRANSLATE_POSITION(&cfg->panel_position, cfg->panel_image.width,
+		       cfg->panel_image.height, cfg, 0);
+    merge_with_background(&cfg->panel_image,
+			  &cfg->background_image,
+			  TO_XY(cfg->panel_position));
+    free_image_buffers(&cfg->background_image);
+    panel_win = XCreateSimpleWindow(dpy, background_win,
+				    TO_XY(cfg->panel_position),
+				    cfg->panel_image.width,
+				    cfg->panel_image.height,
+				    0, 0, 255);
+    pixmap = imageToPixmap(dpy, &cfg->panel_image, scr, panel_win);
+    free_image_buffers(&cfg->panel_image);
     XSetWindowBackgroundPixmap(dpy, panel_win, pixmap);
+    XClearWindow(dpy, panel_win);
     XFreePixmap(dpy, pixmap);
-
+    XMapWindow(dpy, background_win);
     for (int i=0; i < 5; i++)
       {
 	if (~i & 1)

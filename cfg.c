@@ -10,6 +10,12 @@
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
+
+#ifndef TESTCFG
+#include "dm.h"
+#include "greet.h"
+#endif
+
 #include "util.h"
 #include "keywords.h"
 #include "image.h"
@@ -23,9 +29,11 @@
 #define INLINE_DECL
 #endif
 
+#ifdef TESTCFG
 #define LogError printf
 #define UNMANAGE_DISPLAY 0
 #define RESERVER_DISPLAY 1
+#endif
 
 #define DUMMY_RESOURCE_CLASS "_dummy_"
 
@@ -859,11 +867,11 @@ struct cfg *get_cfg(Display *dpy)
   char *theme_list[MAX_THEMES];
   int theme_count = break_tokens(themes, theme_list, MAX_THEMES);  
 
-  srandom((int)(time(NULL)));
+  srand((int)time(NULL));
 
   while (theme_count)
     {
-      int theme_number = random() % theme_count;
+      int theme_number = rand() % theme_count;
       char *theme_path = mkfilepath(2, theme_dir, theme_list[theme_number]);
       int success = get_theme(dpy, &cfg, theme_path);
       free(theme_path);
