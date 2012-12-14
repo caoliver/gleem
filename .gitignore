@@ -4,6 +4,7 @@ GTAGS
 HTML
 xdm-1.1.11/*
 slim/*
+pam/*
 *.png
 *.jpg
 *.jpeg

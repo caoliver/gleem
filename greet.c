@@ -11,8 +11,8 @@
 
 #include <poll.h>
 
-#include "cfg.h"
 #include "image.h"
+#include "cfg.h"
 
 /*
  * Function pointers filled in by the initial call ito the library
