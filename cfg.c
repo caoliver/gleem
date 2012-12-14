@@ -336,9 +336,9 @@ get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
   str = skip_space(end);
   while (*str)
     {
-      static int flags_true[5] =
+      static int flags_true[] =
 	{ PUT_LEFT, PUT_RIGHT, PUT_ABOVE, PUT_BELOW, PUT_CENTER };
-      static int flags_masked[5] =
+      static int flags_masked[] =
 	{ ~HORIZ_MASK, ~HORIZ_MASK, ~VERT_MASK, ~VERT_MASK, 0 };
       int key_num;
 
@@ -347,11 +347,11 @@ get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
 	{
 	case KEYWORD_C:
 	  key_num = KEYWORD_CENTER;
-	case KEYWORD_CENTER:
 	case KEYWORD_LEFT:
 	case KEYWORD_RIGHT:
 	case KEYWORD_ABOVE:
 	case KEYWORD_BELOW:
+	case KEYWORD_CENTER:
 	  key_num -= KEYWORD_LEFT;
 	  result_position->flags =
 	    (result_position->flags & flags_masked[key_num]) |
@@ -391,32 +391,27 @@ get_cmd_shortcut(Display *dpy, void *valptr, char *shortcut)
   const char *str = shortcut, *end;
   while (*str)
     {
+      static int masks[] = {
+	Mod1Mask, Mod2Mask, Mod3Mask, Mod4Mask, Mod5Mask,
+	ShiftMask, ControlMask
+      };
+      int key_num;
+			     
       if (!*(end = scan_to_space(str)))
 	break;
 
-      switch (lookup_keyword(str, end - str))
+      switch (key_num = lookup_keyword(str, end - str))
 	{
-	case KEYWORD_CTRL:
 	case KEYWORD_C:
-	  cmd->mod_state |= ControlMask;
-	  break;
-	case KEYWORD_SHIFT:
-	  cmd->mod_state |= ShiftMask;
-	  break;
+	  key_num = KEYWORD_CTRL;
 	case KEYWORD_MOD1:
-	  cmd->mod_state |= Mod1Mask;
-	  break;
 	case KEYWORD_MOD2:
-	  cmd->mod_state |= Mod2Mask;
-	  break;
 	case KEYWORD_MOD3:
-	  cmd->mod_state |= Mod3Mask;
-	  break;
 	case KEYWORD_MOD4:
-	  cmd->mod_state |= Mod4Mask;
-	  break;
 	case KEYWORD_MOD5:
-	  cmd->mod_state |= Mod5Mask;
+	case KEYWORD_SHIFT:
+	case KEYWORD_CTRL:
+	  cmd->mod_state |= masks[key_num - KEYWORD_MOD1];
 	  break;
 	default:
 	  LogError("Bad modifier in shortcut: context = %s\n", str);

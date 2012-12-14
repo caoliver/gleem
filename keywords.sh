@@ -70,7 +70,7 @@ generate_lookup_function()
 for pass in generate_headers generate_lookup_function;do
     $pass <<TOKEN_DESCRIPTIONS
 
-# Placement token numbers are used as index, so this arrangement
+# Placement token numbers are used as indices, so this arrangement
 # must be preserved.
 LEFT left l
 RIGHT right r
@@ -78,7 +78,8 @@ ABOVE above a
 BELOW below b
 CENTER center
 
-# Modifiers
+# Modifier token numbers are used as indices, so this arrangement
+# must be preserved.
 MOD1 mod1 m1
 MOD2 mod2 m2
 MOD3 mod3 m3
@@ -96,7 +97,7 @@ COLOR color
 TILE tile
 STRETCH stretch
 
-# Ambiguous.  Could mean center, could mean ctrl.
+# Means center in positions, and ctrl in shortcuts.
 C c
 
 # Actions
