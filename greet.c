@@ -64,11 +64,16 @@ static Display *InitGreet(struct display *d)
     return 0;
   RegisterCloseOnFork(ConnectionNumber(dpy));
   SecureDisplay(d, dpy);
+  int scr = DefaultScreen(dpy);
+  Window root_win = RootWindow(dpy, scr);
+  XSetWindowBackground(dpy, root_win, BlackPixel(dpy, scr));
+  XClearWindow(dpy, root_win);
   return dpy;
 }
 
 static void CloseGreet(struct display *d, Display *dpy)
 {
+  XClearWindow(dpy, RootWindow(dpy, DefaultScreen(dpy)));
   UnsecureDisplay(d, dpy);
   ClearCloseOnFork(XConnectionNumber(dpy));
   XCloseDisplay(dpy);
@@ -84,7 +89,7 @@ greet_user_rtn GreetUser(
 
 {
     int scr;
-    Window root_win, background_win, panel_win;
+    Window background_win, panel_win;
     Pixmap pixmap;
     static Display *dpy;
     struct cfg *cfg;
@@ -144,10 +149,7 @@ greet_user_rtn GreetUser(
     
     cfg = get_cfg(dpy);
 
-    root_win = RootWindow(dpy, scr);
-    XSetWindowBackground(dpy, root_win, BlackPixel(dpy, DefaultScreen(dpy)));
-    XClearWindow(dpy, root_win);
-    background_win = XCreateSimpleWindow(dpy, root_win,
+    background_win = XCreateSimpleWindow(dpy, RootWindow(dpy, scr),
 					 cfg->screen_specs.xoffset,
 					 cfg->screen_specs.yoffset,
 					 cfg->screen_specs.width,
@@ -164,9 +166,6 @@ greet_user_rtn GreetUser(
     XSetWindowBackgroundPixmap(dpy, background_win, pixmap);
     XClearWindow(dpy, background_win);
     XFreePixmap(dpy, pixmap);
-
-    // Trial junk below here.
-
     if (cfg->panel_image.width == 0)
       {
 	cfg->input_highlight = 1;
@@ -191,6 +190,10 @@ greet_user_rtn GreetUser(
     XClearWindow(dpy, panel_win);
     XFreePixmap(dpy, pixmap);
     XMapWindow(dpy, background_win);
+
+    // Dummy stuff below.
+
+
     for (int i=0; i < 5; i++)
       {
 	if (~i & 1)
@@ -207,8 +210,9 @@ greet_user_rtn GreetUser(
     struct pollfd pfd = {0};
     pfd.fd = ConnectionNumber(dpy);
     pfd.events = POLLIN;
-    sleep(5);
+    sleep(2);
 
+    XDestroyWindow(dpy, background_win);
     CloseGreet(d, dpy);
     return Greet_Failure;
 }

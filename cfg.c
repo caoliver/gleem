@@ -11,7 +11,11 @@
 #include <errno.h>
 #include <time.h>
 
-#ifndef TESTCFG
+#ifdef TESTGUI
+#define LogError printf
+#define UNMANAGE_DISPLAY 0
+#define RESERVER_DISPLAY 1
+#else
 #include "dm.h"
 #include "greet.h"
 #endif
@@ -27,12 +31,6 @@
 #define INLINE_DECL __inline
 #else
 #define INLINE_DECL
-#endif
-
-#ifdef TESTCFG
-#define LogError printf
-#define UNMANAGE_DISPLAY 0
-#define RESERVER_DISPLAY 1
 #endif
 
 #define DUMMY_RESOURCE_CLASS "_dummy_"

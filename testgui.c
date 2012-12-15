@@ -408,6 +408,7 @@ int main(int argc, char *argv[])
 {
   if (!strcmp(getenv("DISPLAY"), ":0"))
     errx(1, "Please use Xephyr");
+  system("xrdb -load $HOME/.Xresources;xrdb -merge gleem.conf");
   do_stuff();
   return 0;
 }

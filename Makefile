@@ -15,7 +15,7 @@ testgui: ${OBJS} testgui.c
 	gcc ${LDFLAGS} ${CFLAGS} -pedantic -o $@ $^
 
 testlib: testlib.c libXdmGreet.so
-	gcc ${CFLAGS} $< -ldl -o $@
+	gcc ${CFLAGS} $< -ldl -lcrypt -o $@
 
 libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
 	gcc ${LDFLAGS} -shared -o $@ $^
