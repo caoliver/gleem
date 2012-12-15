@@ -5,8 +5,11 @@ HTML
 xdm-1.1.11/*
 slim/*
 pam/*
+etc/*
 *.png
 *.jpg
 *.jpeg
 *~
 *.o
+*.so
+Xresources

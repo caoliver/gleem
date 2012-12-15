@@ -75,11 +75,16 @@ static void debugout(const char *fmt, ...)
   va_end(ap);
 }
 
+static __inline__ void printenv_internal(char **env)
+{
+  while (*env)
+    printf("\t%s\n", *env++);
+}
+
 static void printenv(char **env)
 {
   puts("PrintEnv called.");
-  while (*env)
-    printf("\t%s\n", *env++);
+  printenv_internal(env);
 }
 
 struct group *fgetgrent (FILE *__stream);
@@ -363,6 +368,22 @@ static char ** systemenv (struct display *d, char *user, char *home)
   return env;
 }
 
+static void setupdisplay(struct display *d)
+{
+  printf("Called SetupDisplay(%lx)\n", (long)d);
+}
+
+char *_SysErrorMsg (int n)
+{
+    char *s = strerror(n);
+    return (s ? s : "unknown error");
+}
+
+void restore_resources()
+{
+  system("xrdb -load $HOME/.Xresources");
+}
+
 int main(int argc, char *argv[])
 {
   Display *dpy;
@@ -376,10 +397,17 @@ int main(int argc, char *argv[])
   static struct display display;
   static struct greet_info  greet_info;
   static struct verify_info verify_info; 
+  char cmd[128];
   
-  system("xrdb -load $HOME/.Xresources;xrdb -merge gleem.conf");
+  void *libhandle = dlopen(argc < 2 ? "./libXdmGreet.so" : argv[1], RTLD_NOW);
 
-  void *libhandle = dlopen("./libXdmGreet.so", RTLD_NOW);
+  if (!libhandle || !(GreetUser.dlsym = dlsym(libhandle, "GreetUser")))
+    errx(1, dlerror());
+
+  atexit(restore_resources);
+  sprintf(cmd, "xrdb -load $HOME/.Xresources;xrdb -merge %s",
+	  argc > 2 ? argv[2] : "gleem.conf");
+  system(cmd);
 
   display.name = getenv("DISPLAY");
 
@@ -409,12 +437,46 @@ int main(int argc, char *argv[])
   dlfuncs._source = mysource;
   dlfuncs._systemEnv = systemenv;
   dlfuncs._defaultEnv = defaultenv;
+  dlfuncs._SetupDisplay = setupdisplay;
 
-  if (!libhandle)
-    errx(1, dlerror());
+  int result;
 
-  GreetUser.dlsym = dlsym(libhandle, "GreetUser");
-  GreetUser.function(&display, &dpy, &verify_info, &greet_info, &dlfuncs);
+  switch (result = GreetUser.function(&display, &dpy,
+				      &verify_info, &greet_info, &dlfuncs))
+    {
+    case Greet_Session_Over:
+      puts("GreetUser managed its own session.  We're done.");
+      break;
+    case Greet_Success:
+      puts("GreetUser authorized this user. but we must manage the session.");
+      break;
+    default:
+      puts("GreetUser failed somehow.");
+    }
+
+#define SHOW_STR(NAME) printf("\t" #NAME ": %s\n", NAME)
+#define SHOW_NUM(NAME) printf("\t" #NAME ": %d\n", NAME)
+
+  if (result != Greet_Failure)
+    {
+      SHOW_STR(greet_info.name);
+      SHOW_STR(greet_info.password);
+      SHOW_STR(greet_info.string);
+      SHOW_STR(greet_info.passwd);
+      SHOW_NUM(greet_info.version);
+      SHOW_NUM(greet_info.allow_null_passwd);
+      SHOW_NUM(greet_info.allow_root_login);
+      puts("");
+      SHOW_NUM(verify_info.uid);
+      SHOW_NUM(verify_info.gid);
+      puts("\nverify_info.argv");
+      printenv_internal(verify_info.argv);
+      puts("\nverify_info.userEnviron");
+      printenv_internal(verify_info.userEnviron);
+      puts("\nverify_info.systemEnviron");
+      printenv_internal(verify_info.systemEnviron);
+      SHOW_NUM(verify_info.version);
+    }
 
   dlclose(libhandle);
   return 0;
