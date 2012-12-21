@@ -33,7 +33,8 @@ void do_stuff()
   Cfg *cfg;
   Gfx gfx_instance, *gfx = &gfx_instance;
   int is_secret = 1;
-  
+
+  memset(gfx, 0, sizeof(*gfx));
   gfx->dpy = dpy = XOpenDisplay(NULL);
   cfg = get_cfg(dpy);
   scr = gfx->screen = DefaultScreen(dpy);
@@ -124,7 +125,6 @@ void do_stuff()
 	       cfg->input_height, cfg->username_prompt);
   show_input_at(gfx, cfg, out, &cfg->username_input_position,
 		cfg->username_input_width, 1, is_secret);
-  activate_cursor(gfx, cfg, 0);
   activate_cursor(gfx, cfg, 1);
 
   while (again)
