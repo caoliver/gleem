@@ -59,6 +59,7 @@ pam_handle_t **(*__xdm_thepamhp)(void) = NULL;
 
 static int InitGreet(struct display *d, Gfx *gfx)
 {
+  memset(gfx, 0, sizeof(*gfx));
   Display *dpy = gfx->dpy = XOpenDisplay(d->name);
   if (!dpy)
     return 0;
