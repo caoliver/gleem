@@ -14,7 +14,7 @@
 #include "gfx.h"
 
 
-int __xdm_LogError(char *fmt, ...)
+int LogError(const char *fmt, ...)
 {
   int res;
   va_list ap;
@@ -24,6 +24,7 @@ int __xdm_LogError(char *fmt, ...)
   return res;
 }
 
+int (*__xdm_LogError)(const char * fmt, ...) = LogError;
 
 void do_stuff()
 {
@@ -58,7 +59,7 @@ void do_stuff()
   else
     frame_background(&cfg->background_image,
 		     cfg->screen_specs.width, cfg->screen_specs.height,
-		     cfg->screen_specs.width + 1, 0, &cfg->background_color);
+		     0, 0, &cfg->background_color);
   pixmap = imageToPixmap(dpy, &cfg->background_image, scr,
 			 gfx->background_win);
   XSetWindowBackgroundPixmap(dpy, gfx->background_win, pixmap);
@@ -69,7 +70,7 @@ void do_stuff()
       cfg->input_highlight = 1;
       frame_background(&cfg->panel_image,
 		       DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT,
-		       cfg->screen_specs.width + 1, 0, &cfg->panel_color);
+		       0, 0, &cfg->panel_color);
     }
   TRANSLATE_POSITION(&cfg->panel_position, cfg->panel_image.width,
 		     cfg->panel_image.height, cfg, 0);
