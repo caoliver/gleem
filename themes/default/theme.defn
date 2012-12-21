@@ -31,5 +31,3 @@ prompt.font: Verdana:size=16:bold:dpi=75
 *.prompt.position: 375 188 left above
 *.input.width: 193
 *.input.position: 389 188 right above
-
-password.input.display: *

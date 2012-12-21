@@ -181,7 +181,7 @@
 #define MAX_COMMANDS 128
 #define MIN_COMMANDS 16
 
-struct screen_specs {
+struct _ScreenSpecs {
   unsigned int xoffset;
   unsigned int yoffset;
   unsigned int width;
@@ -190,13 +190,17 @@ struct screen_specs {
   unsigned int total_height;
 };
 
-struct position {
+typedef struct _ScreenSpecs ScreenSpecs;
+
+struct _XYPosition {
   int x, y, flags;
 };
 
+typedef struct _XYPosition XYPosition;
+
 #define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
 
-struct command {
+struct _Command {
   int action;  // Keyword whitespace [optional params]
   char* action_params;
   int delay;
@@ -207,25 +211,27 @@ struct command {
   ADD_ALLOC_FLAG(char *, allowed_users);
 };
 
-struct cfg {
+typedef struct _Command Command;
+
+struct _Cfg {
   struct image background_image, panel_image;
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
   int cursor_blink, input_highlight;
   int message_duration, command_count;
-  struct screen_specs screen_specs;
+  ScreenSpecs screen_specs;
   int background_style;
   char password_mask;
-  struct command *commands;
+  Command *commands;
   char *current_session;  // Pointer into session string.
-  struct position panel_position;
-  struct position message_position, welcome_position;
-  struct position message_shadow_offset, welcome_shadow_offset;
-  struct position password_prompt_position, username_prompt_position;
-  struct position prompt_shadow_offset;
-  struct position input_shadow_offset;
-  struct position password_input_position, username_input_position;
+  XYPosition panel_position;
+  XYPosition message_position, welcome_position;
+  XYPosition message_shadow_offset, welcome_shadow_offset;
+  XYPosition password_prompt_position, username_prompt_position;
+  XYPosition prompt_shadow_offset;
+  XYPosition input_shadow_offset;
+  XYPosition password_input_position, username_input_position;
   int password_input_width, username_input_width, input_height;
-  struct position cursor_size;
+  XYPosition cursor_size;
   int cursor_offset;
   ADD_ALLOC_FLAG(XftColor, background_color);
   ADD_ALLOC_FLAG(XftColor, cursor_color);
@@ -253,6 +259,7 @@ struct cfg {
   ADD_ALLOC_FLAG(char *, panel_filename);
 };
 
+typedef struct _Cfg Cfg;
 
 #define TRANSLATION_IS_CACHED 1
 
@@ -274,11 +281,11 @@ struct cfg {
 #define NEGATE_POS(A) NEGATE_XY(TO_XY(A))
 
 
-struct cfg *get_cfg(Display *dpy);
-void release_cfg(Display *dpy, struct cfg *cfg);
-void position_to_coord(struct position *posn, int width, int height,
-		       struct cfg* cfg, int is_text);
-int translate_position(struct position *posn, int width, int height,
-                        struct cfg* cfg, int is_text);
+Cfg *get_cfg(Display *dpy);
+void release_cfg(Display *dpy, Cfg *cfg);
+void position_to_coord(XYPosition *posn, int width, int height, Cfg* cfg,
+		       int is_text);
+int translate_position(XYPosition *posn, int width, int height, Cfg* cfg,
+		       int is_text);
 
 #endif /* _CFG_H_ */

@@ -4,14 +4,16 @@ LDFLAGS+=-ljpeg -lpng -lX11 -lXft -lXinerama -ldl
 
 GOBJS=greet.o
 OBJS=image.o numlock.o read.o util.o cfg.o keywords.o
-BINS=testlib testgui libXdmGreet.so
+BINS=testgui
+BINS+=testlib libXdmGreet.so
+BINS+=testlib-pam libXdmGreet-pam.so
 
 .PHONY: clean tags
 
 ${OBJS} greet.o: %.o: %.c
 	${CC} -c ${CFLAGS} -pedantic $< -o $@
 
-testgui: ${OBJS} testgui.c
+testgui: ${OBJS} testgui.c text.c
 	gcc ${LDFLAGS} ${CFLAGS} -pedantic -o $@ $^
 
 testlib: testlib.c libXdmGreet.so
@@ -19,6 +21,12 @@ testlib: testlib.c libXdmGreet.so
 
 libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
 	gcc ${LDFLAGS} -shared -o $@ $^
+
+testlib-pam: testlib.c libXdmGreet-pam.so
+	gcc ${CFLAGS} -Wl,-E $< -ldl -lcrypt -lpam -o $@
+
+libXdmGreet-pam.so: greet.o ${OBJS} ${GOBJS}
+	gcc ${LDFLAGS} -lpam -shared -o $@ $^
 
 install: libXdmGreet.so
 	mv -n /etc/X11/xdm/libXdmGreet.so /etc/X11/xdm/libXdmGreet.so~

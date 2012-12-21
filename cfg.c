@@ -49,7 +49,7 @@
 #define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
 #define VERT_MASK (PUT_ABOVE | PUT_BELOW)
 
-struct resource_spec {
+struct _ResourceSpec {
   char *name;
   int (*allocate)(Display *dpy, void *where, char *deflt);
   void (*free)(Display *dpy, void *where);
@@ -58,7 +58,9 @@ struct resource_spec {
   size_t allocated;
 };
 
-static struct cfg cfg;
+typedef struct _ResourceSpec ResourceSpec;
+
+static Cfg cfg;
 
 static INLINE_DECL const char *skip_space(const char *str)
 {
@@ -105,7 +107,7 @@ static int get_cfg_count(Display *dpy, void *valptr, char *num_str)
 static int get_cfg_xinerama(Display *dpy, void *valptr, char *screen_name)
 {
   XineramaScreenInfo *screen_info;
-  struct screen_specs *specs = (struct screen_specs *)valptr;
+  ScreenSpecs *specs = (ScreenSpecs *)valptr;
   int num_screens, desired_screen = 0;
 
   int scr = DefaultScreen(dpy);
@@ -272,7 +274,7 @@ static int get_cfg_char(Display *dpy, void *valptr, char *value)
 {
   if (strlen(value) != 1)
     {
-      LogError("Invalie char value: %s", value);
+      LogError("Invalid char value: %s", value);
       return GET_CFG_FAIL;
     }
 
@@ -324,7 +326,7 @@ get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
 			  int pixel_pair)
 {
   long scan;
-  struct position *result_position = valptr;
+  XYPosition *result_position = valptr;
 
   const char *str = position_string;
   char *end;
@@ -389,7 +391,7 @@ static int get_cfg_pixel_pair(Display *dpy, void *valptr, char *posn_string)
 static int
 get_cmd_shortcut(Display *dpy, void *valptr, char *shortcut)
 {
-  struct command *cmd = valptr;
+  Command *cmd = valptr;
 
   if (!shortcut)
     return ALLOC_STATIC;
@@ -491,7 +493,7 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 {
   char *type;
   XrmValue value;
-  struct command *cmd = valptr;
+  Command *cmd = valptr;
 
   if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
     {
@@ -530,14 +532,14 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 #define DECLSTATIC(NAME, ALLOC, DEFAULT, FIELD)		\
   {   STRINGIFY(RNAME_ ## NAME),				\
       ALLOC, NULL,					\
-      DEFAULT, offsetof(struct DECL_STRUCT, FIELD), 0 }
+      DEFAULT, offsetof(DECL_TYPE, FIELD), 0 }
 
 #define DECLDYNAMIC(NAME, ALLOC, FREE, DEFAULT, FIELD)	\
   {   STRINGIFY(RNAME_ ## NAME),				\
       ALLOC, FREE,					\
       DEFAULT,						\
-      offsetof(struct DECL_STRUCT, FIELD),		\
-      offsetof(struct DECL_STRUCT, FIELD##_ALLOC) }
+      offsetof(DECL_TYPE, FIELD),		\
+      offsetof(DECL_TYPE, FIELD##_ALLOC) }
 
 #define DECLSTRING(NAME, DEFAULT, PLACE) \
   DECLDYNAMIC(NAME, get_cfg_string,  free_cfg_string, DEFAULT, PLACE)
@@ -560,9 +562,9 @@ static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
 #define DECLCOUNT(NAME, DEFAULT,PLACE)				\
   DECLSTATIC(NAME, get_cfg_count, DEFAULT_##DEFAULT, PLACE)
 
-#define DECL_STRUCT cfg
+#define DECL_TYPE Cfg
 
-static struct resource_spec cfg_resources[] = {
+static ResourceSpec cfg_resources[] = {
   DECLBOOLEAN(IGNORE_CAPSLOCK, IGNORE_CAPSLOCK, ignore_capslock),
   DECLBOOLEAN(NUMLOCK, NUMLOCK, numlock),
   DECLBOOLEAN(HIDE_MOUSE, HIDE_MOUSE, hide_mouse),
@@ -580,11 +582,12 @@ static struct resource_spec cfg_resources[] = {
 	     command_count),
   DECLSTRING(PASS_PROMPT, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(USER_PROMPT, DEFAULT_USER_PROMPT, username_prompt),
+  DECLSTATIC(PASS_DISPLAY, get_cfg_char, DEFAULT_PASS_MASK, password_mask),
 };
 
-#define NUM_CFG (sizeof(cfg_resources) / sizeof(struct resource_spec))
+#define NUM_CFG (sizeof(cfg_resources) / sizeof(ResourceSpec))
 
-static struct resource_spec theme_resources[] = {
+static ResourceSpec theme_resources[] = {
   DECLPOSITION(PANEL_POSITION, PANEL_POSN, panel_position),
   DECLPOSITION(MESSAGE_POSITION, MESSAGE_POSN, message_position),
   DECLPOSITION(WELCOME_POSITION, WELCOME_POSN, welcome_position),
@@ -634,16 +637,14 @@ static struct resource_spec theme_resources[] = {
   DECLCOUNT(INPUT_HEIGHT, INPUT_HEIGHT, input_height),
   DECLSTATIC(BACKGROUND_STYLE, get_cfg_bkgnd_style, DEFAULT_BKGND_STYLE,
 	     background_style),
-  DECLSTATIC(PASS_DISPLAY, get_cfg_char, DEFAULT_PASS_MASK,
-	     password_mask),
 };
 
-#define NUM_THEME (sizeof(theme_resources) / sizeof(struct resource_spec))
+#define NUM_THEME (sizeof(theme_resources) / sizeof(ResourceSpec))
 
-#undef DECL_STRUCT
-#define DECL_STRUCT command
+#undef DECL_TYPE
+#define DECL_TYPE Command
 
-static struct resource_spec cmd_resources[] = {
+static ResourceSpec cmd_resources[] = {
   { STRINGIFY(RNAME_CMD_SHORTCUT), get_cmd_shortcut, NULL, NULL, 0, 0 },
   DECLSTATIC(CMD_DELAY, get_cfg_count, DEFAULT_EXEC_DELAY, delay),
   DECLSTRING(CMD_NAME, NULL, name),
@@ -651,10 +652,10 @@ static struct resource_spec cmd_resources[] = {
   DECLSTRING(CMD_USERS, NULL, allowed_users),
 };
 
-#define NUM_CMD (sizeof(cmd_resources) / sizeof(struct resource_spec))
+#define NUM_CMD (sizeof(cmd_resources) / sizeof(ResourceSpec))
 
-int translate_position(struct position *posn, int width, int height,
-		        struct cfg* cfg, int is_text)
+int translate_position(XYPosition *posn, int width, int height,
+		        Cfg* cfg, int is_text)
 {
   if (posn->flags & TRANSLATION_IS_CACHED)
     return 0;
@@ -686,9 +687,9 @@ int translate_position(struct position *posn, int width, int height,
 }
 
 
-static void free_theme_resources(Display *dpy, struct cfg *cfg)
+static void free_theme_resources(Display *dpy, Cfg *cfg)
 {
-  struct resource_spec *spec = theme_resources;
+  ResourceSpec *spec = theme_resources;
 
   for (int i = 0; i < NUM_THEME ; i++, spec++)
     if (spec->free && *(int *)((char *)cfg + spec->allocated))
@@ -700,12 +701,12 @@ static void free_theme_resources(Display *dpy, struct cfg *cfg)
 
 
 
-static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
+static int get_theme(Display *dpy, Cfg *cfg, char *theme_path)
 {
   XrmDatabase db;
   int rc = 0;
   char name[48];
-  struct resource_spec *spec;
+  ResourceSpec *spec;
   char *filepath = NULL;
 
   if (theme_path)
@@ -782,7 +783,7 @@ static int get_theme(Display *dpy, struct cfg *cfg, char *theme_path)
 }
 
 
-struct cfg *get_cfg(Display *dpy)
+Cfg *get_cfg(Display *dpy)
 {
   char *type, *param;
   XrmValue value;
@@ -795,7 +796,7 @@ struct cfg *get_cfg(Display *dpy)
 
   memset(&cfg, 0, sizeof(cfg));
   strcpy(name, MAIN_RESOURCE_PREFIX);
-  struct resource_spec *spec = cfg_resources;
+  ResourceSpec *spec = cfg_resources;
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
       strcpy(&name[sizeof(MAIN_RESOURCE_PREFIX)-1], spec->name);
@@ -830,12 +831,12 @@ struct cfg *get_cfg(Display *dpy)
     cfg.command_count = MIN_COMMANDS;
   else if (cfg.command_count > MAX_COMMANDS)
     cfg.command_count = MAX_COMMANDS;
-  cfg.commands = xcalloc(sizeof(struct command), cfg.command_count);
+  cfg.commands = xcalloc(sizeof(Command), cfg.command_count);
 
   strcpy(name, COMMAND_RESOURCE_PREFIX);
   for (int cmd_id = 0; cmd_id < cfg.command_count; cmd_id++)
     {
-      struct command *cmd = &cfg.commands[cmd_id];
+      Command *cmd = &cfg.commands[cmd_id];
       char *rest_of_name = &name[sizeof(COMMAND_RESOURCE_PREFIX)-1];
       rest_of_name += sprintf(rest_of_name, "%d.", cmd_id + 1);
       strcpy(rest_of_name, "action");
@@ -895,9 +896,9 @@ struct cfg *get_cfg(Display *dpy)
   return &cfg;
 }
   
-void release_cfg(Display *dpy, struct cfg *cfg)
+void release_cfg(Display *dpy, Cfg *cfg)
 {
-  struct resource_spec *spec = cfg_resources;
+  ResourceSpec *spec = cfg_resources;
   for (int i = 0; i < NUM_CFG ; i++, spec++)
     {
       if (spec->free && *(int *)((char *)cfg + spec->allocated))
@@ -908,7 +909,7 @@ void release_cfg(Display *dpy, struct cfg *cfg)
 
   for (int i = 0; i < cfg->command_count; i++)
     {
-      struct command *cmd = &cfg->commands[i];
+      Command *cmd = &cfg->commands[i];
       spec = cmd_resources;
       for (int j = 0; j < NUM_CMD ; j++, spec++)
 	{

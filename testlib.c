@@ -8,6 +8,11 @@
 #include <grp.h>
 #include <shadow.h>
 #include <ctype.h>
+
+#ifdef USE_PAM
+#include <security/pam_appl.h>
+#endif
+
 #include "dm.h"
 #include "dm_error.h"
 #include "greet.h"
@@ -16,6 +21,21 @@
 #define SHDFILE "etc/shadow"
 #define GRPFILE "etc/group"
 
+#ifdef USE_PAM
+pam_handle_t ** mypamhp(void)
+{
+  static pam_handle_t *pamh = NULL;
+  return &pamh;
+}
+
+pam_handle_t *mypamh()
+{
+  pam_handle_t **pamhp;
+
+  pamhp = mypamhp();
+  return pamhp ? *pamhp : NULL;
+}
+#endif
 
 #define DLFUNC(RETURN_TYPE, ARGUMENT_PROTOTYPE)		\
   union {						\
@@ -384,6 +404,14 @@ void restore_resources()
   system("xrdb -load $HOME/.Xresources");
 }
 
+#ifdef USE_PAM
+void close_pam()
+{
+  if (mypamh())
+    pam_close_session(mypamh(), 0);
+}
+#endif
+
 int main(int argc, char *argv[])
 {
   Display *dpy;
@@ -396,15 +424,26 @@ int main(int argc, char *argv[])
   static struct dlfuncs dlfuncs;
   static struct display display;
   static struct greet_info  greet_info;
-  static struct verify_info verify_info; 
+  static struct verify_info verify_info;
   char cmd[128];
-  
-  void *libhandle = dlopen(argc < 2 ? "./libXdmGreet.so" : argv[1], RTLD_NOW);
+
+#ifdef USE_PAM  
+  void *libhandle = dlopen(argc < 2
+    ? "./libXdmGreet-pam.so"
+    : argv[1], RTLD_NOW);
+#else
+  void *libhandle = dlopen(argc < 2
+    ? "./libXdmGreet.so"
+    : argv[1], RTLD_NOW);
+# endif
 
   if (!libhandle || !(GreetUser.dlsym = dlsym(libhandle, "GreetUser")))
     errx(1, dlerror());
 
   atexit(restore_resources);
+#ifdef USE_PAM
+  atexit(close_pam);
+#endif
   sprintf(cmd, "xrdb -load $HOME/.Xresources;xrdb -merge %s",
 	  argc > 2 ? argv[2] : "gleem.conf");
   system(cmd);
@@ -438,6 +477,9 @@ int main(int argc, char *argv[])
   dlfuncs._systemEnv = systemenv;
   dlfuncs._defaultEnv = defaultenv;
   dlfuncs._SetupDisplay = setupdisplay;
+#ifdef USE_PAM
+  dlfuncs._thepamhp = mypamhp;
+#endif
 
   int result;
 
