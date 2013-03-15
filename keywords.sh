@@ -76,17 +76,7 @@ LEFT left l
 RIGHT right r
 ABOVE above a
 BELOW below b
-CENTER center
-
-# Modifier token numbers are used as indices, so this arrangement
-# must be preserved.
-MOD1 mod1 m1
-MOD2 mod2 m2
-MOD3 mod3 m3
-MOD4 mod4 m4
-MOD5 mod5 m5
-SHIFT shift s
-CTRL ctrl
+CENTER center c
 
 # Booleans
 TRUE yes on true
@@ -96,13 +86,6 @@ FALSE no off false
 COLOR color
 TILE tile
 STRETCH stretch
-
-# Means center in positions, and ctrl in shortcuts.
-C c
-
-# Actions
-EXEC exec
-SWITCH_SESSION switch-session
 
 TOKEN_DESCRIPTIONS
 done

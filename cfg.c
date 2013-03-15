@@ -353,8 +353,6 @@ get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
       end = (char *)scan_to_space(str);
       switch (key_num = lookup_keyword(str, end-str))
 	{
-	case KEYWORD_C:
-	  key_num = KEYWORD_CENTER;
 	case KEYWORD_LEFT:
 	case KEYWORD_RIGHT:
 	case KEYWORD_ABOVE:
@@ -386,68 +384,6 @@ static int get_cfg_position(Display *dpy, void *valptr, char *posn_string)
 static int get_cfg_pixel_pair(Display *dpy, void *valptr, char *posn_string)
 {
   return get_cfg_position_internal(dpy, valptr, posn_string, 1);
-}
-
-static int
-get_cmd_shortcut(Display *dpy, void *valptr, char *shortcut)
-{
-  Command *cmd = valptr;
-
-  if (!shortcut)
-    return ALLOC_STATIC;
-
-  const char *str = shortcut, *end;
-  while (*str)
-    {
-      static int masks[] = {
-	Mod1Mask, Mod2Mask, Mod3Mask, Mod4Mask, Mod5Mask,
-	ShiftMask, ControlMask
-      };
-      int key_num;
-			     
-      if (!*(end = scan_to_space(str)))
-	break;
-
-      switch (key_num = lookup_keyword(str, end - str))
-	{
-	case KEYWORD_C:
-	  key_num = KEYWORD_CTRL;
-	case KEYWORD_MOD1:
-	case KEYWORD_MOD2:
-	case KEYWORD_MOD3:
-	case KEYWORD_MOD4:
-	case KEYWORD_MOD5:
-	case KEYWORD_SHIFT:
-	case KEYWORD_CTRL:
-	  cmd->mod_state |= masks[key_num - KEYWORD_MOD1];
-	  break;
-	default:
-	  LogError("Bad modifier in shortcut: context = %s\n", str);
-	  return GET_CFG_FAIL;
-	}
-
-      str = skip_space(end);
-    }
-
-  KeySym keysym = XStringToKeysym(str);
-  if (keysym != NoSymbol)
-    {
-      char ascii;
-      int extra;
-
-      XkbTranslateKeySym(dpy, &keysym, cmd->mod_state, &ascii, 1, &extra);
-      if (!IsModifierKey(keysym) &&
-	  (!isprint(ascii)
-	   || (ascii == ' '  && cmd->mod_state)
-	   || (cmd->mod_state & ~ShiftMask)))
-	{
-	  cmd->keysym = keysym;
-	  return ALLOC_STATIC;
-	}
-    }
-
-  LogError("Bad key symbol in shortcut: context = %s\n", str);
-  return GET_CFG_FAIL;
 }
 
 static int get_cfg_font(Display *dpy, void *valptr, char *font_name)
@@ -487,43 +423,6 @@ static void free_cfg_color(Display *dpy, void *where)
   Visual *visual = DefaultVisual(dpy, scr);
 
   XftColorFree(dpy, visual, colormap, where);
-}
-
-static int get_cmd_action(XrmDatabase db, const char *name, void *valptr)
-{
-  char *type;
-  XrmValue value;
-  Command *cmd = valptr;
-
-  if (!XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value))
-    {
-      cmd->action = 0;
-      return GET_CFG_FAIL;
-    }
-
-  const char *str = value.addr;
-  const char *end = scan_to_space(str);
-  switch (cmd->action = lookup_keyword(str, end - str))
-    {
-    case KEYWORD_EXEC:
-      if (*(str = skip_space(end)))
-	{
-	  cmd->action_params = xstrdup(str);
-	  break;
-	}
-      LogError("Missing command to exec in %s\n", name);
-      return GET_CFG_FAIL;
-
-    case KEYWORD_SWITCH_SESSION:
-      cmd->action_params = *(str = skip_space(end)) ? xstrdup(str) : NULL;
-      break;
-
-    default:
-      LogError("Invalid action: %s: %s\n", name, str);
-      return GET_CFG_FAIL;
-    }
-
-  return ALLOC_STATIC;
 }
 
 #define STRINGIFY_HELPER(SYMBOL) #SYMBOL
@@ -573,13 +472,11 @@ static ResourceSpec cfg_resources[] = {
   DECLSTRING(DEFAULT_USER, NULL, default_user),
   DECLDYNAMIC(WELCOME_MESSAGE, get_cfg_welcome,  free_cfg_string,
 	      DEFAULT_WELCOME_MESSAGE, welcome_message),
-  DECLSTRING(SESSIONS, DEFAULT_SESSIONS, sessions),
   DECLSTATIC(MESSAGE_DURATION, get_cfg_count, DEFAULT_MESSAGE_DURATION,
 	     message_duration),
   DECLSTATIC(XINERAMA_SCREEN, get_cfg_xinerama,
 	     DEFAULT_XINERAMA_SCREEN, screen_specs),
-  DECLSTATIC(MAX_COMMANDS, get_cfg_count, DEFAULT_COMMAND_COUNT,
-	     command_count),
+  DECLSTRING(BUTTON_BOX, DEFAULT_BUTTON_BOX, button_box),
   DECLSTRING(PASS_PROMPT, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(USER_PROMPT, DEFAULT_USER_PROMPT, username_prompt),
   DECLSTATIC(PASS_DISPLAY, get_cfg_char, DEFAULT_PASS_MASK, password_mask),
@@ -640,19 +537,6 @@ static ResourceSpec theme_resources[] = {
 };
 
 #define NUM_THEME (sizeof(theme_resources) / sizeof(ResourceSpec))
-
-#undef DECL_TYPE
-#define DECL_TYPE Command
-
-static ResourceSpec cmd_resources[] = {
-  { STRINGIFY(RNAME_CMD_SHORTCUT), get_cmd_shortcut, NULL, NULL, 0, 0 },
-  DECLSTATIC(CMD_DELAY, get_cfg_count, DEFAULT_EXEC_DELAY, delay),
-  DECLSTRING(CMD_NAME, NULL, name),
-  DECLSTRING(CMD_MESSAGE, NULL, message),
-  DECLSTRING(CMD_USERS, NULL, allowed_users),
-};
-
-#define NUM_CMD (sizeof(cmd_resources) / sizeof(ResourceSpec))
 
 int translate_position(XYPosition *posn, int width, int height,
 		        Cfg* cfg, int is_text)
@@ -812,7 +696,6 @@ Cfg *get_cfg(Display *dpy)
 	  *(int *)((char *)&cfg + spec->allocated) = 1;
 	}
     }
-  cfg.current_session = cfg.sessions;
   theme_dir =
     xstrdup(XrmGetResource(db,
 			   MAIN_RESOURCE_PREFIX
@@ -827,39 +710,6 @@ Cfg *get_cfg(Display *dpy)
 			   DUMMY_RESOURCE_CLASS, &type, &value)
 	    ? value.addr
 	    : DEFAULT_THEME_SELECTION);
-  if (cfg.command_count < MIN_COMMANDS)
-    cfg.command_count = MIN_COMMANDS;
-  else if (cfg.command_count > MAX_COMMANDS)
-    cfg.command_count = MAX_COMMANDS;
-  cfg.commands = xcalloc(sizeof(Command), cfg.command_count);
-
-  strcpy(name, COMMAND_RESOURCE_PREFIX);
-  for (int cmd_id = 0; cmd_id < cfg.command_count; cmd_id++)
-    {
-      Command *cmd = &cfg.commands[cmd_id];
-      char *rest_of_name = &name[sizeof(COMMAND_RESOURCE_PREFIX)-1];
-      rest_of_name += sprintf(rest_of_name, "%d.", cmd_id + 1);
-      strcpy(rest_of_name, "action");
-      get_cmd_action(db, name, cmd);
-      if (!cmd->action)
-	continue;
-      spec = cmd_resources;
-      for (int i = 0; i < NUM_CMD ; i++, spec++)
-	{
-	  strcpy(rest_of_name, spec->name);
-	  param =
-	    !XrmGetResource(db, name, DUMMY_RESOURCE_CLASS, &type, &value)
-	    ? spec->default_value
-	    : value.addr;
-	  switch ((spec->allocate)(dpy, (char *)cmd + spec->offset, param))
-	    {
-	    case GET_CFG_FAIL:
-	      exit(UNMANAGE_DISPLAY);
-	    case ALLOC_DYNAMIC:
-	      *(int *)((char *)cmd + spec->allocated) = 1;
-	    }
-	}
-    }
 
   XrmDestroyDatabase(db);
 
@@ -906,19 +756,4 @@ void release_cfg(Display *dpy, Cfg *cfg)
     }
 
   free_theme_resources(dpy, cfg);
-
-  for (int i = 0; i < cfg->command_count; i++)
-    {
-      Command *cmd = &cfg->commands[i];
-      spec = cmd_resources;
-      for (int j = 0; j < NUM_CMD ; j++, spec++)
-	{
-	  if (spec->free && *(int *)((char *)cmd + spec->allocated))
-	    (spec->free)(dpy, (void *)((char *)cmd + spec->offset));
-	}
-      
-      free(cmd->action_params);
-    }
-
-  free(cfg->commands);
 }

@@ -14,25 +14,12 @@
 #define RNAME_FOCUS_PASSWORD focus-password
 #define RNAME_DEFAULT_USER default-user
 #define RNAME_WELCOME_MESSAGE welcome-message
-#define RNAME_SESSIONS sessions
 #define RNAME_MESSAGE_DURATION message-duration
 #define RNAME_XINERAMA_SCREEN xinerama-screen
-#define RNAME_MAX_COMMANDS command.scan-to
 #define RNAME_THEME_DIRECTORY theme.directory
 #define RNAME_THEME_SELECTION theme.selection
 #define RNAME_PASS_PROMPT password.prompt.string
 #define RNAME_USER_PROMPT username.prompt.string
-
-
-// Command resources
-
-#define COMMAND_RESOURCE_PREFIX MAIN_RESOURCE_PREFIX "command."
-
-#define RNAME_CMD_DELAY delay
-#define RNAME_CMD_SHORTCUT shortcut
-#define RNAME_CMD_NAME name
-#define RNAME_CMD_MESSAGE message
-#define RNAME_CMD_USERS users
 
 
 // Theme resources
@@ -101,7 +88,7 @@
 #define RNAME_PASS_DISPLAY password.input-display
 #define RNAME_CURSOR_SIZE cursor.size
 #define RNAME_CURSOR_OFFSET cursor.offset
-
+#define RNAME_BUTTON_BOX button-box
 
 
 //// Resource default values
@@ -110,12 +97,10 @@
 #define DEFAULT_CURSOR_SIZE "3 22"
 #define DEFAULT_CURSOR_OFFSET "1"
 
-#define DEFAULT_SESSIONS NULL
 #define DEFAULT_THEME_DIRECTORY "./themes"
 #define DEFAULT_THEME_SELECTION "default"
 
 #define DEFAULT_MESSAGE_DURATION "3"
-#define DEFAULT_COMMAND_COUNT "16"
 #define DEFAULT_XINERAMA_SCREEN "0"
 #define DEFAULT_EXEC_DELAY "0"
 
@@ -169,6 +154,7 @@
 #define DEFAULT_USER_INPUT_WIDTH "250"
 #define DEFAULT_INPUT_SHADOW_OFFSET "0 0"
 
+#define DEFAULT_BUTTON_BOX NULL
 
 // NO USER SERVICABLE PARTS BELOW
 
@@ -178,9 +164,6 @@
 #define THEME_FILE_NAME "theme.defn"
 
 #define MAX_THEMES 64
-#define MAX_COMMANDS 128
-#define MIN_COMMANDS 16
-
 struct _ScreenSpecs {
   unsigned int xoffset;
   unsigned int yoffset;
@@ -200,29 +183,14 @@ typedef struct _XYPosition XYPosition;
 
 #define ADD_ALLOC_FLAG(TYPE, NAME) TYPE NAME; int NAME##_ALLOC
 
-struct _Command {
-  int action;  // Keyword whitespace [optional params]
-  char* action_params;
-  int delay;
-  KeySym keysym;
-  unsigned mod_state;
-  ADD_ALLOC_FLAG(char *, name);
-  ADD_ALLOC_FLAG(char *, message);
-  ADD_ALLOC_FLAG(char *, allowed_users);
-};
-
-typedef struct _Command Command;
-
 struct _Cfg {
   struct image background_image, panel_image;
   int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
   int cursor_blink, input_highlight;
-  int message_duration, command_count;
+  int message_duration;
   ScreenSpecs screen_specs;
   int background_style;
   char password_mask;
-  Command *commands;
-  char *current_session;  // Pointer into session string.
   XYPosition panel_position;
   XYPosition message_position, welcome_position;
   XYPosition message_shadow_offset, welcome_shadow_offset;
@@ -250,6 +218,7 @@ struct _Cfg {
   ADD_ALLOC_FLAG(XftFont *, welcome_font);
   ADD_ALLOC_FLAG(XftFont *, input_font);
   ADD_ALLOC_FLAG(XftFont *, prompt_font);
+  ADD_ALLOC_FLAG(char *, button_box);
   ADD_ALLOC_FLAG(char *, default_user);
   ADD_ALLOC_FLAG(char *, welcome_message);
   ADD_ALLOC_FLAG(char *, sessions);
