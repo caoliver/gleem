@@ -2,14 +2,20 @@
 *.shadow.offset: 1 1
 
 cursor.color: #702342
+cursor.size: 2 22
 
 message.position: 50% 40%
 message.color: #FFFFFF
 message.font: Verdana:size=18:bold:dpi=75
 
+clock.position: 50% 37%
+clock.color: #FFFFFF
+clock.font: Verdana:size=20:bold:dpi=75
+clock.format: %a %F %k:%M
+
 !welcome.font: Verdana:size=18:bold:dpi=75
-welcome.font: Verdana:size=24:bold:dpi=75
-welcome.position: 50% 40%
+welcome.font: Verdana:size=36:bold:dpi=75
+welcome.position: 50% 30%
 welcome.color: #FFFFFF
 
 background.file: background.jpg

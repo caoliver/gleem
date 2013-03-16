@@ -31,6 +31,7 @@
 #define RNAME_PANEL_POSITION panel.position
 #define RNAME_MESSAGE_POSITION message.position
 #define RNAME_WELCOME_POSITION welcome.position
+#define RNAME_CLOCK_POSITION clock.position
 #define RNAME_PASSWORD_PROMPT_POSITION password.prompt.position
 #define RNAME_PASSWORD_INPUT_POSITION password.input.position
 #define RNAME_USERNAME_PROMPT_POSITION username.prompt.position
@@ -41,6 +42,7 @@
 #define RNAME_MESSAGE_SHADOW_OFFSET message.shadow.offset
 #define RNAME_INPUT_SHADOW_OFFSET input.shadow.offset
 #define RNAME_WELCOME_SHADOW_OFFSET welcome.shadow.offset
+#define RNAME_CLOCK_SHADOW_OFFSET clock.shadow.offset
 #define RNAME_PROMPT_SHADOW_OFFSET prompt.shadow.offset
 
 // -- Input field dimensions
@@ -58,6 +60,8 @@
 #define RNAME_MESSAGE_SHADOW_COLOR message.shadow.color
 #define RNAME_WELCOME_COLOR welcome.color
 #define RNAME_WELCOME_SHADOW_COLOR welcome.shadow.color
+#define RNAME_CLOCK_COLOR clock.color
+#define RNAME_CLOCK_SHADOW_COLOR clock.shadow.color
 #define RNAME_PROMPT_COLOR prompt.color
 #define RNAME_PROMPT_SHADOW_COLOR prompt.shadow.color
 #define RNAME_INPUT_COLOR input.color
@@ -69,6 +73,7 @@
 
 #define RNAME_MESSAGE_FONT message.font
 #define RNAME_WELCOME_FONT welcome.font
+#define RNAME_CLOCK_FONT clock.font
 #define RNAME_INPUT_FONT input.font
 #define RNAME_PROMPT_FONT prompt.font
 
@@ -89,11 +94,11 @@
 #define RNAME_CURSOR_SIZE cursor.size
 #define RNAME_CURSOR_OFFSET cursor.offset
 #define RNAME_BUTTON_BOX button-box
+#define RNAME_CLOCK_FORMAT clock.format
 
 
 //// Resource default values
 
-// Cursor geometry isn't run time configurable.  Should it be?
 #define DEFAULT_CURSOR_SIZE "3 22"
 #define DEFAULT_CURSOR_OFFSET "1"
 
@@ -125,6 +130,8 @@
 #define DEFAULT_MESSAGE_SHADOW_COLOR "gray"
 #define DEFAULT_WELCOME_COLOR "white"
 #define DEFAULT_WELCOME_SHADOW_COLOR "gray"
+#define DEFAULT_CLOCK_COLOR "white"
+#define DEFAULT_CLOCK_SHADOW_COLOR "gray"
 #define DEFAULT_PROMPT_COLOR "white"
 #define DEFAULT_PROMPT_SHADOW_COLOR "gray"
 #define DEFAULT_INPUT_COLOR "deepskyblue4"
@@ -134,6 +141,7 @@
 
 #define DEFAULT_MESSAGE_FONT "Verdana:size=20:dpi=75"
 #define DEFAULT_WELCOME_FONT "Verdana:size=20:dpi=75"
+#define DEFAULT_CLOCK_FONT "Verdana:size=20:dpi=75"
 #define DEFAULT_INPUT_FONT "Verdana:size=20:dpi=75"
 #define DEFAULT_PROMPT_FONT "Verdana:size=24:dpi=75"
 
@@ -142,12 +150,14 @@
 #define DEFAULT_PANEL_HEIGHT 300
 #define DEFAULT_MESSAGE_POSN "50% 30% center"
 #define DEFAULT_WELCOME_POSN "50% 40% center"
+#define DEFAULT_CLOCK_POSN "50% 42% center"
 #define DEFAULT_PASS_PROMPT_POSN "160 180 left"
 #define DEFAULT_PASS_INPUT_POSN "180 180 right"
 #define DEFAULT_USER_PROMPT_POSN "160 180 left"
 #define DEFAULT_USER_INPUT_POSN "180 180 right"
 #define DEFAULT_MESSAGE_SHADOW_OFFSET "0 0"
 #define DEFAULT_WELCOME_SHADOW_OFFSET "0 0"
+#define DEFAULT_CLOCK_SHADOW_OFFSET "0 0"
 #define DEFAULT_PROMPT_SHADOW_OFFSET "0 0"
 #define DEFAULT_INPUT_HEIGHT "24"
 #define DEFAULT_PASS_INPUT_WIDTH "250"
@@ -155,6 +165,8 @@
 #define DEFAULT_INPUT_SHADOW_OFFSET "0 0"
 
 #define DEFAULT_BUTTON_BOX NULL
+#define DEFAULT_CLOCK_FORMAT NULL
+
 
 // NO USER SERVICABLE PARTS BELOW
 
@@ -192,8 +204,9 @@ struct _Cfg {
   int background_style;
   char password_mask;
   XYPosition panel_position;
-  XYPosition message_position, welcome_position;
+  XYPosition message_position, welcome_position, clock_position;
   XYPosition message_shadow_offset, welcome_shadow_offset;
+  XYPosition clock_shadow_offset;
   XYPosition password_prompt_position, username_prompt_position;
   XYPosition prompt_shadow_offset;
   XYPosition input_shadow_offset;
@@ -208,6 +221,8 @@ struct _Cfg {
   ADD_ALLOC_FLAG(XftColor, message_shadow_color);
   ADD_ALLOC_FLAG(XftColor, welcome_color);
   ADD_ALLOC_FLAG(XftColor, welcome_shadow_color);
+  ADD_ALLOC_FLAG(XftColor, clock_color);
+  ADD_ALLOC_FLAG(XftColor, clock_shadow_color);
   ADD_ALLOC_FLAG(XftColor, prompt_color);
   ADD_ALLOC_FLAG(XftColor, prompt_shadow_color);
   ADD_ALLOC_FLAG(XftColor, input_color);
@@ -216,8 +231,10 @@ struct _Cfg {
   ADD_ALLOC_FLAG(XftColor, input_shadow_color);
   ADD_ALLOC_FLAG(XftFont *, message_font);
   ADD_ALLOC_FLAG(XftFont *, welcome_font);
+  ADD_ALLOC_FLAG(XftFont *, clock_font);
   ADD_ALLOC_FLAG(XftFont *, input_font);
   ADD_ALLOC_FLAG(XftFont *, prompt_font);
+  ADD_ALLOC_FLAG(char *, clock_format);
   ADD_ALLOC_FLAG(char *, button_box);
   ADD_ALLOC_FLAG(char *, default_user);
   ADD_ALLOC_FLAG(char *, welcome_message);

@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
+#include <time.h>
 
 #include "dm.h"
 #include "dm_error.h"
@@ -41,20 +42,11 @@ void    (*__xdm_LogOutOfMem)(const char * fmt, ...) = NULL;
 void    (*__xdm_setgrent)(void) = NULL;
 struct group    *(*__xdm_getgrent)(void) = NULL;
 void    (*__xdm_endgrent)(void) = NULL;
-# ifdef HAVE_GETSPNAM
 struct spwd   *(*__xdm_getspnam)(GETSPNAM_ARGS) = NULL;
-#  ifndef QNX4
 void   (*__xdm_endspent)(void) = NULL;
-#  endif /* QNX4 doesn't use endspent */
-# endif
 struct passwd   *(*__xdm_getpwnam)(GETPWNAM_ARGS) = NULL;
-# if defined(linux) || defined(__GLIBC__)
 void   (*__xdm_endpwent)(void) = NULL;
-# endif
 char     *(*__xdm_crypt)(CRYPT_ARGS) = NULL;
-# ifdef USE_PAM
-pam_handle_t **(*__xdm_thepamhp)(void) = NULL;
-# endif
 
 
 static int InitGreet(struct display *d, Gfx *gfx)
@@ -82,6 +74,105 @@ static void CloseGreet(struct display *d, Gfx *gfx)
   UnsecureDisplay(d, dpy);
   ClearCloseOnFork(XConnectionNumber(dpy));
   XCloseDisplay(dpy);
+}
+
+__inline__ static void raise_button_bar()
+{
+  dprintf(1, "\nRaise button bar\n");
+}
+
+#define BUFFER_LEN 128
+#define USERNAME 0
+#define PASSWORD 1
+
+char input_buffer[2][BUFFER_LEN];
+int input_buffer_ix[2];
+
+__inline__ static void wipe_char(int bufferix)
+{
+  if (input_buffer_ix[bufferix] > 0)
+    input_buffer[bufferix][--input_buffer_ix[bufferix]] = 0;
+}
+
+__inline__ static void wipe_field(int bufferix)
+{
+  input_buffer_ix[bufferix] = 0;
+  input_buffer[bufferix][0] = 0;
+}
+
+int reuse_input_area;
+TextAttrs *PromptAttrsPtr, *ClockAttrsPtr;
+
+void show_input_prompts(Cfg *cfg, Gfx *gfx, int active_field)
+{
+  static int old_field = -1;
+
+  if (!reuse_input_area)
+    {
+      SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		   &cfg->username_prompt_position,
+		   cfg->input_height, cfg->username_prompt);
+      SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		   &cfg->password_prompt_position,
+		   cfg->input_height, cfg->password_prompt);
+    }
+  else if (active_field == 1)
+    {
+      CLEAR_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		    &cfg->username_prompt_position,
+		    cfg->input_height, cfg->username_prompt);
+      SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		   &cfg->password_prompt_position,
+		   cfg->input_height, cfg->password_prompt);
+    }
+  else
+    {
+      CLEAR_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		    &cfg->password_prompt_position,
+		    cfg->input_height, cfg->password_prompt);
+      SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
+		   &cfg->username_prompt_position,
+		   cfg->input_height, cfg->username_prompt);
+    }
+}
+
+void show_input_fields(Cfg *cfg, Gfx *gfx, int active_field)
+{
+  if (!reuse_input_area)
+    if (active_field)
+      show_input_at(gfx, cfg, input_buffer[0], &cfg->username_input_position, 
+		    cfg->username_input_width, 0, 0);
+    else
+      show_input_at(gfx, cfg, input_buffer[1], &cfg->password_input_position, 
+		    cfg->password_input_width, 0, 1);
+
+  if (!active_field)
+    show_input_at(gfx, cfg, input_buffer[0], &cfg->username_input_position, 
+		  cfg->username_input_width, 1, 0);
+  else
+    show_input_at(gfx, cfg, input_buffer[1], &cfg->password_input_position, 
+		  cfg->password_input_width, 1, 1);
+
+  activate_cursor(gfx, cfg, 1);
+}
+
+__inline__ static void show_clock(Cfg *cfg, Gfx *gfx)
+{
+  static char out[256];
+  static int needs_erasing;
+
+  if (needs_erasing)
+    CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &cfg->clock_position, 0,
+		  out);
+  needs_erasing = 0;
+  time_t t = time(NULL);
+  struct tm *tm = localtime(&t);
+  if (tm && strftime(out, sizeof(out), cfg->clock_format, tm))
+    {
+      needs_erasing = 1;
+      SHOW_TEXT_AT(gfx, cfg, ClockAttrsPtr, &cfg->clock_position, 0,
+		   out);
+    }
 }
 
 
@@ -129,20 +220,11 @@ greet_user_rtn GreetUser(
   __xdm_setgrent = dlfuncs->_setgrent;
   __xdm_getgrent = dlfuncs->_getgrent;
   __xdm_endgrent = dlfuncs->_endgrent;
-# ifdef HAVE_GETSPNAM
   __xdm_getspnam = dlfuncs->_getspnam;
-#  ifndef QNX4
   __xdm_endspent = dlfuncs->_endspent;
-#  endif /* QNX4 doesn't use endspent */
-# endif
   __xdm_getpwnam = dlfuncs->_getpwnam;
-# if defined(linux) || defined(__GLIBC__)
   __xdm_endpwent = dlfuncs->_endpwent;
-# endif
   __xdm_crypt = dlfuncs->_crypt;
-# ifdef USE_PAM
-  __xdm_thepamhp = dlfuncs->_thepamhp;
-# endif
 
   if (!(InitGreet(d, &gfx)))
     {
@@ -151,6 +233,11 @@ greet_user_rtn GreetUser(
     }
   dpy = gfx.dpy;
   cfg = get_cfg(dpy);
+
+  reuse_input_area = 
+    (cfg->username_input_position.x == cfg->password_input_position.x &&
+     cfg->username_input_position.y == cfg->password_input_position.y &&
+     cfg->username_input_position.flags == cfg->password_input_position.flags);
     
   gfx.background_win = XCreateSimpleWindow(dpy, RootWindow(dpy, gfx.screen),
 					   cfg->screen_specs.xoffset,
@@ -198,19 +285,11 @@ greet_user_rtn GreetUser(
   XClearWindow(dpy, gfx.panel_win);
   XFreePixmap(dpy, pixmap);
   XMapWindow(dpy, gfx.background_win);
+  XMapWindow(dpy, gfx.panel_win);
 
-  // Dummy stuff below.
-
-
-  for (int i=0; i < 5; i++)
-    {
-      if (~i & 1)
-	XMapWindow(dpy, gfx.panel_win);
-      else
-	XUnmapWindow(dpy, gfx.panel_win);
-      XFlush(dpy);
-      sleep(1);
-    }
+  set_cursor_dimensions(&gfx, cfg,
+                        cfg->cursor_size.x, cfg->cursor_size.y,
+                        cfg->cursor_offset);
 
   XSelectInput(dpy, gfx.root_win, KeyPressMask);
   XSelectInput(dpy, gfx.panel_win, ExposureMask);
@@ -218,7 +297,142 @@ greet_user_rtn GreetUser(
   struct pollfd pfd = {0};
   pfd.fd = ConnectionNumber(dpy);
   pfd.events = POLLIN;
-  sleep(2);
+
+  int again = 1;
+  int which_field = 0;
+  TextAttrs WelcomeAttrs = {
+    cfg->welcome_font, &cfg->welcome_color,
+    &cfg->welcome_shadow_color, &cfg->welcome_shadow_offset
+  };
+  TextAttrs PromptAttrs = {
+    cfg->prompt_font, &cfg->prompt_color,
+    &cfg->prompt_shadow_color, &cfg->prompt_shadow_offset
+  };
+  PromptAttrsPtr = &PromptAttrs;
+  TextAttrs ClockAttrs = {
+    cfg->clock_font, &cfg->clock_color,
+    &cfg->clock_shadow_color, &cfg->clock_shadow_offset
+  };
+  ClockAttrsPtr = &ClockAttrs;
+
+  SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs, &cfg->welcome_position,
+	       0, cfg->welcome_message);
+  show_input_prompts(cfg, &gfx, 0);
+  show_input_fields(cfg, &gfx, 0);
+  while (again)
+    {
+      if (cfg->clock_format)
+	show_clock(cfg, &gfx);
+
+      if (!XPending(dpy))
+	{
+	  switch (poll(&pfd, 1, CURSOR_BLINK_SPEED))
+	    {
+	    case -1:
+	      continue;
+	    case 0:
+	      activate_cursor(&gfx, cfg,
+			      !cfg->cursor_blink || !get_cursor_state(&gfx));
+	      break;
+	    }
+	}
+
+      while (XPending(dpy))
+	{
+	  XEvent event;
+	  KeySym keysym;
+	  XComposeStatus compstatus;
+	  char ascii;
+	  
+	  XNextEvent(dpy, &event);
+	  switch (event.type)
+	    {
+	    case Expose:
+	      show_input_prompts(cfg, &gfx, which_field);
+	      SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs, &cfg->welcome_position,
+			   0, cfg->welcome_message);
+	      break;
+	    case KeyPress:
+	      XLookupString(&event.xkey, &ascii, 1, &keysym, &compstatus);
+	      switch (keysym)
+		{
+		case XK_Delete:
+		case XK_BackSpace:
+		  if (((XKeyEvent *) & event)->state & Mod1Mask)
+		    {
+		      wipe_field(which_field);
+		      break;
+		    }
+		  if (((XKeyEvent *) & event)->state & ControlMask)
+		    {
+		      which_field = 0;
+		      show_input_prompts(cfg, &gfx, which_field);
+		      wipe_field(0);
+		      wipe_field(1);
+		      break;
+		    }
+		  wipe_char(which_field);
+		  break;
+		case XK_Tab:
+		  which_field = !which_field;
+		  wipe_field(1);
+		  show_input_prompts(cfg, &gfx, which_field);
+		  break;
+		case XK_Return:
+		case XK_KP_Enter:
+		  if (!which_field)
+		    {
+		      which_field = 1;
+		      wipe_field(1);
+		      show_input_prompts(cfg, &gfx, which_field);
+		      break;
+		    }
+		  goto done;
+		  break;
+		case XK_space:
+		  if (((XKeyEvent *) & event)->state & ControlMask)
+		    {
+		      raise_button_bar();
+		      break;
+		    }
+		default:
+		  if (((XKeyEvent *) & event)->state & Mod1Mask)
+		    break;
+		  if (((XKeyEvent *) & event)->state & ControlMask)
+		    {
+		      switch(keysym)
+			{
+			case XK_c:
+			  which_field = 0;
+			  wipe_field(0);
+			  wipe_field(1);
+			  break;
+			case XK_u:
+			case XK_w:
+			  wipe_field(which_field);
+			  break;
+			}
+		      break;
+		    }
+		  if (isprint(ascii) &&
+		      (keysym < XK_Shift_L || keysym > XK_Hyper_R) &&
+		      input_buffer_ix[which_field] < BUFFER_LEN - 1)
+		    {
+		      input_buffer[which_field][input_buffer_ix[which_field]++]=
+			ascii;
+		      input_buffer[which_field][input_buffer_ix[which_field]]=
+			0;
+		    }
+		}
+	    }
+	  show_input_fields(cfg, &gfx, which_field);
+	}
+    }
+
+ done:
+
+  dprintf(1, "username is: %s\n", input_buffer[0]);
+  dprintf(1, "password is: %s\n", input_buffer[1]);
 
   CloseGreet(d, &gfx);
   return Greet_Failure;

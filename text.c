@@ -92,14 +92,12 @@ void set_cursor_dimensions(Gfx *gfx, Cfg *cfg,
 static void draw_cursor(Gfx *gfx, Cfg *cfg)
 {
   if (gfx->cursor_state || cfg->input_highlight)
-    {
-      XftDrawRect(gfx->panel_draw,
-		  gfx->cursor_state
-		  ? &cfg->cursor_color
-		  : &cfg->input_highlight_color,
-		  gfx->cursor_x, gfx->cursor_y,
-		  gfx->cursor_width, gfx->cursor_height);
-    }
+    XftDrawRect(gfx->panel_draw,
+		gfx->cursor_state
+		? &cfg->cursor_color
+		: &cfg->input_highlight_color,
+		gfx->cursor_x, gfx->cursor_y,
+		gfx->cursor_width, gfx->cursor_height);
   else
     XClearArea(gfx->dpy, gfx->panel_win, gfx->cursor_x, gfx->cursor_y,
 	       gfx->cursor_width, gfx->cursor_height, False);

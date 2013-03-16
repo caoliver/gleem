@@ -3,23 +3,23 @@ CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall
 LDFLAGS+=-ljpeg -lpng -lX11 -lXft -lXinerama -ldl
 
 GOBJS=greet.o
-OBJS=image.o numlock.o read.o util.o cfg.o keywords.o
+OBJS=image.o numlock.o read.o util.o cfg.o keywords.o text.o
 BINS=testgui
 BINS+=testlib libXdmGreet.so
 BINS+=testlib-pam libXdmGreet-pam.so
 
 .PHONY: clean tags
 
-${OBJS} greet.o: %.o: %.c
-	${CC} -c ${CFLAGS} -pedantic $< -o $@
-
-testgui: ${OBJS} testgui.c text.c
-	gcc ${LDFLAGS} ${CFLAGS} -pedantic -o $@ $^
-
 testlib: testlib.c libXdmGreet.so
 	gcc ${CFLAGS} -Wl,-E $< -ldl -lcrypt -o $@
 
-libXdmGreet.so: greet.o ${OBJS} ${GOBJS}
+${OBJS} greet.o: %.o: %.c
+	${CC} -c ${CFLAGS} -pedantic $< -o $@
+
+testgui: ${OBJS} testgui.c
+	gcc ${LDFLAGS} ${CFLAGS} -pedantic -o $@ $^
+
+libXdmGreet.so: greet.o text.o ${OBJS} ${GOBJS}
 	gcc ${LDFLAGS} -shared -o $@ $^
 
 testlib-pam: testlib.c libXdmGreet-pam.so
