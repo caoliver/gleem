@@ -464,11 +464,11 @@ static void free_cfg_color(Display *dpy, void *where)
 #define DECL_TYPE Cfg
 
 static ResourceSpec cfg_resources[] = {
-  DECLBOOLEAN(IGNORE_CAPSLOCK, IGNORE_CAPSLOCK, ignore_capslock),
-  DECLBOOLEAN(NUMLOCK, NUMLOCK, numlock),
   DECLBOOLEAN(HIDE_MOUSE, HIDE_MOUSE, hide_mouse),
   DECLBOOLEAN(AUTO_LOGIN, AUTO_LOGIN, auto_login),
-  DECLBOOLEAN(FOCUS_PASSWORD, FOCUS_PASSWORD, auto_login),
+  DECLBOOLEAN(FOCUS_PASSWORD, FOCUS_PASSWORD, focus_password),
+  DECLBOOLEAN(ALLOW_ROOT, ALLOW_ROOT, allow_root),
+  DECLBOOLEAN(ALLOW_NULL_PASS, ALLOW_NULL_PASS, allow_null_pass),
   DECLSTRING(DEFAULT_USER, NULL, default_user),
   DECLDYNAMIC(WELCOME_MESSAGE, get_cfg_welcome,  free_cfg_string,
 	      DEFAULT_WELCOME_MESSAGE, welcome_message),
@@ -476,9 +476,14 @@ static ResourceSpec cfg_resources[] = {
 	     message_duration),
   DECLSTATIC(XINERAMA_SCREEN, get_cfg_xinerama,
 	     DEFAULT_XINERAMA_SCREEN, screen_specs),
-  DECLSTRING(BUTTON_BOX, DEFAULT_BUTTON_BOX, button_box),
+  DECLSTRING(EXTENSION_PROGRAM, DEFAULT_EXTENSION_PROGRAM, extension_program),
   DECLSTRING(PASS_PROMPT, DEFAULT_PASS_PROMPT, password_prompt),
   DECLSTRING(USER_PROMPT, DEFAULT_USER_PROMPT, username_prompt),
+  DECLSTRING(MSG_BAD_PASS, DEFAULT_MSG_BAD_PASS, msg_bad_pass),
+  DECLSTRING(MSG_BAD_SHELL, DEFAULT_MSG_BAD_SHELL, msg_bad_shell),
+  DECLSTRING(MSG_PASS_REQD, DEFAULT_MSG_PASS_REQD, msg_pass_reqd),
+  DECLSTRING(MSG_NO_LOGIN, DEFAULT_MSG_NO_LOGIN, msg_no_login),
+  DECLSTRING(MSG_NO_ROOT, DEFAULT_MSG_NO_ROOT, msg_no_root),
   DECLSTATIC(PASS_DISPLAY, get_cfg_char, DEFAULT_PASS_MASK, password_mask),
 };
 

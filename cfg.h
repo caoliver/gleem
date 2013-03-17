@@ -7,8 +7,6 @@
 
 #define MAIN_RESOURCE_PREFIX "gleem."
 
-#define RNAME_IGNORE_CAPSLOCK ignore-capslock
-#define RNAME_NUMLOCK numlock
 #define RNAME_HIDE_MOUSE hide-mouse
 #define RNAME_AUTO_LOGIN auto-login
 #define RNAME_FOCUS_PASSWORD focus-password
@@ -20,7 +18,15 @@
 #define RNAME_THEME_SELECTION theme.selection
 #define RNAME_PASS_PROMPT password.prompt.string
 #define RNAME_USER_PROMPT username.prompt.string
+#define RNAME_EXTENSION_PROGRAM extension-program
+#define RNAME_ALLOW_ROOT allow-root
+#define RNAME_ALLOW_NULL_PASS allow-null-password
 
+#define RNAME_MSG_BAD_PASS msg.bad-password
+#define RNAME_MSG_BAD_SHELL msg.bad-shell
+#define RNAME_MSG_PASS_REQD msg.password-required
+#define RNAME_MSG_NO_ROOT msg.no-root-login
+#define RNAME_MSG_NO_LOGIN msg.no-login
 
 // Theme resources
 
@@ -93,29 +99,39 @@
 #define RNAME_PASS_DISPLAY password.input-display
 #define RNAME_CURSOR_SIZE cursor.size
 #define RNAME_CURSOR_OFFSET cursor.offset
-#define RNAME_BUTTON_BOX button-box
 #define RNAME_CLOCK_FORMAT clock.format
 
 
 //// Resource default values
 
+// Main default values
+
 #define DEFAULT_CURSOR_SIZE "3 22"
 #define DEFAULT_CURSOR_OFFSET "1"
 
-#define DEFAULT_THEME_DIRECTORY "./themes"
+#define DEFAULT_THEME_DIRECTORY "/etc/X11/xdm/themes"
 #define DEFAULT_THEME_SELECTION "default"
 
 #define DEFAULT_MESSAGE_DURATION "3"
 #define DEFAULT_XINERAMA_SCREEN "0"
 #define DEFAULT_EXEC_DELAY "0"
 
-#define DEFAULT_NUMLOCK "false"
-#define DEFAULT_HIDE_MOUSE "false"
-#define DEFAULT_IGNORE_CAPSLOCK "false"
+#define DEFAULT_HIDE_MOUSE "true"
 #define DEFAULT_AUTO_LOGIN "false"
 #define DEFAULT_FOCUS_PASSWORD "false"
 #define DEFAULT_CURSOR_BLINK "false"
 #define DEFAULT_INPUT_HIGHLIGHT "false"
+#define DEFAULT_ALLOW_ROOT "true"
+#define DEFAULT_ALLOW_NULL_PASS "true"
+#define DEFAULT_EXTENSION_PROGRAM NULL
+
+#define DEFAULT_MSG_BAD_PASS "Invalid user or password"
+#define DEFAULT_MSG_BAD_SHELL "Invalid login shell"
+#define DEFAULT_MSG_PASS_REQD "A password is required"
+#define DEFAULT_MSG_NO_ROOT "Root login forbidden"
+#define DEFAULT_MSG_NO_LOGIN "Login is currently forbidden here"
+
+// Theme default values
 
 #define DEFAULT_WELCOME_MESSAGE "Welcome to ~h"
 #define DEFAULT_USER_PROMPT "Username:"
@@ -163,8 +179,6 @@
 #define DEFAULT_PASS_INPUT_WIDTH "250"
 #define DEFAULT_USER_INPUT_WIDTH "250"
 #define DEFAULT_INPUT_SHADOW_OFFSET "0 0"
-
-#define DEFAULT_BUTTON_BOX NULL
 #define DEFAULT_CLOCK_FORMAT NULL
 
 
@@ -197,8 +211,8 @@ typedef struct _XYPosition XYPosition;
 
 struct _Cfg {
   struct image background_image, panel_image;
-  int numlock, ignore_capslock, hide_mouse, auto_login, focus_password;
-  int cursor_blink, input_highlight;
+  int hide_mouse, auto_login, focus_password;
+  int allow_root, allow_null_pass, cursor_blink, input_highlight;
   int message_duration;
   ScreenSpecs screen_specs;
   int background_style;
@@ -235,7 +249,7 @@ struct _Cfg {
   ADD_ALLOC_FLAG(XftFont *, input_font);
   ADD_ALLOC_FLAG(XftFont *, prompt_font);
   ADD_ALLOC_FLAG(char *, clock_format);
-  ADD_ALLOC_FLAG(char *, button_box);
+  ADD_ALLOC_FLAG(char *, extension_program);
   ADD_ALLOC_FLAG(char *, default_user);
   ADD_ALLOC_FLAG(char *, welcome_message);
   ADD_ALLOC_FLAG(char *, sessions);
@@ -243,6 +257,11 @@ struct _Cfg {
   ADD_ALLOC_FLAG(char *, password_prompt);
   ADD_ALLOC_FLAG(char *, background_filename);
   ADD_ALLOC_FLAG(char *, panel_filename);
+  ADD_ALLOC_FLAG(char *, msg_bad_pass);
+  ADD_ALLOC_FLAG(char *, msg_bad_shell);
+  ADD_ALLOC_FLAG(char *, msg_pass_reqd);
+  ADD_ALLOC_FLAG(char *, msg_no_login);
+  ADD_ALLOC_FLAG(char *, msg_no_root);
 };
 
 typedef struct _Cfg Cfg;

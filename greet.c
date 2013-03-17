@@ -1,6 +1,9 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 #include <time.h>
+#include <unistd.h>
+#include <shadow.h>
+
 
 #include "dm.h"
 #include "dm_error.h"
@@ -15,6 +18,41 @@
 #include "image.h"
 #include "cfg.h"
 #include "gfx.h"
+
+
+#define USER_PARAM_NAME "GLEEM_USER_PARAM"
+
+static char *envvars[] = {
+    NULL
+};
+
+
+static char **userEnv(struct display *d, int useSystemPath, char *user,
+		      char *home, char *shell, char *user_params)
+{
+  char        **env;
+  char        **envvar;
+  char        *str;
+
+  env = defaultEnv();
+  env = setEnv(env, "DISPLAY", d->name);
+  env = setEnv(env, "HOME", home);
+  env = setEnv(env, "LOGNAME", user);
+  env = setEnv(env, "USER", user);
+  env = setEnv(env, "PATH", useSystemPath ? d->systemPath : d->userPath);
+  env = setEnv(env, "SHELL", shell);
+  if (user_params)
+    env = setEnv(env, USER_PARAM_NAME, user_params);
+  for (envvar = envvars; *envvar; envvar++)
+    {
+      str = getenv(*envvar);
+      if (str)
+	env = setEnv(env, *envvar, str);
+    }
+  return env;
+}
+
+
 
 /*
  * Function pointers filled in by the initial call ito the library
@@ -76,9 +114,10 @@ static void CloseGreet(struct display *d, Gfx *gfx)
   XCloseDisplay(dpy);
 }
 
-__inline__ static void raise_button_bar()
+__inline__ static void run_extension(Cfg *cfg)
 {
-  dprintf(1, "\nRaise button bar\n");
+  if (cfg->extension_program)
+    system(cfg->extension_program);
 }
 
 #define BUFFER_LEN 128
@@ -101,7 +140,7 @@ __inline__ static void wipe_field(int bufferix)
 }
 
 int reuse_input_area;
-TextAttrs *PromptAttrsPtr, *ClockAttrsPtr;
+TextAttrs *PromptAttrsPtr, *ClockAttrsPtr, *MessageAttrsPtr;
 
 void show_input_prompts(Cfg *cfg, Gfx *gfx, int active_field)
 {
@@ -176,6 +215,99 @@ __inline__ static void show_clock(Cfg *cfg, Gfx *gfx)
 }
 
 
+static int has_valid_shell(struct passwd *pw)
+{
+  for (;;)
+    {
+      char *shell = getusershell();
+      if (!shell || !strcmp(pw->pw_shell, shell))
+	{
+	  endusershell();
+	  return shell != NULL;
+	}
+    }
+}
+
+static __inline__ char *validate(Cfg *cfg, struct display *d,
+				 struct verify_info *verify)
+{
+  struct passwd *pw;
+  struct spwd *sp;
+
+  if (strlen(input_buffer[1]) == 0 &&
+      !cfg->allow_null_pass)
+    return cfg->msg_pass_reqd;
+
+  char *colon = strchr(input_buffer[0], ':');
+
+  if (colon)
+    *colon = 0;
+
+  if (strcmp(input_buffer[0], "root"))
+    {
+      if (!access("/etc/nologin", R_OK))
+	return cfg->msg_no_login;
+    }
+  else if (!cfg->allow_root)
+    return cfg->msg_no_root;
+
+  if (pw = getpwnam(input_buffer[0]))
+    {
+      char *password = pw->pw_passwd;
+      char *fuzzed_pw;
+      if (!strcmp(password, "x"))
+	if (sp = getspnam(input_buffer[0]))
+	  password = sp->sp_pwdp;
+
+      fuzzed_pw = crypt(input_buffer[1], password);
+      if (!strcmp(password, fuzzed_pw))
+	{
+	  memset(input_buffer[1], 0, BUFFER_LEN);
+	  if (!has_valid_shell(pw))
+	    return cfg->msg_bad_shell;
+
+	  verify->systemEnviron = systemEnv(d, input_buffer[0], 
+					    pw->pw_dir);
+	  verify->userEnviron = userEnv(d, pw->pw_uid == 0,
+					input_buffer[0],
+					pw->pw_dir,
+					pw->pw_shell,
+					colon ? colon + 1 : NULL);
+	  verify->uid = pw->pw_uid;
+	  verify->gid = pw->pw_gid;
+	  return NULL;
+	}
+    }
+
+  memset(input_buffer[1], 0, BUFFER_LEN);
+  sleep(5);
+  return cfg->msg_bad_pass;
+}
+
+
+__inline__ static void show_message(Cfg *cfg, Gfx *gfx, char **message)
+{
+  static time_t message_expire;
+  time_t now = time(NULL);
+  static char *old_message;
+
+  if (old_message && (*message || now > message_expire))
+    {
+      CLEAR_TEXT_AT(gfx, cfg, MessageAttrsPtr, &cfg->message_position, 0,
+		    old_message);
+      old_message = NULL;
+    }
+  if (*message)
+    {
+      SHOW_TEXT_AT(gfx, cfg, MessageAttrsPtr, &cfg->message_position, 0,
+		   *message);
+      old_message = *message;
+      *message = NULL;
+      message_expire = now + cfg->message_duration;
+    }
+}
+
+
 _X_EXPORT
 greet_user_rtn GreetUser(
     struct display          *d,
@@ -189,11 +321,7 @@ greet_user_rtn GreetUser(
   Pixmap pixmap;
   Cfg *cfg;
   Gfx gfx;
-
-
-  // Stop program for debugging.
-  //    raise(SIGSTOP);
-  //   __asm__("int3");
+  char *message = NULL;
 
   /*
    * These must be set before they are used.
@@ -292,14 +420,43 @@ greet_user_rtn GreetUser(
                         cfg->cursor_offset);
 
   XSelectInput(dpy, gfx.root_win, KeyPressMask);
+  XSelectInput(dpy, gfx.background_win, ExposureMask);
   XSelectInput(dpy, gfx.panel_win, ExposureMask);
 
   struct pollfd pfd = {0};
   pfd.fd = ConnectionNumber(dpy);
   pfd.events = POLLIN;
-
-  int again = 1;
+  
   int which_field = 0;
+  struct passwd *pw;
+  if (cfg->default_user)
+    if (!(pw = getpwnam(cfg->default_user)))
+      LogError("Default user %s doesn't exist.\n", cfg->default_user);
+    else if (!has_valid_shell(pw))
+      LogError("Default user %s has an invalid shell %s\n",
+	       cfg->default_user, pw->pw_shell);
+    else
+      {
+	strncpy(input_buffer[0], cfg->default_user, BUFFER_LEN);
+	if (cfg->auto_login)
+	  {
+	    verify->systemEnviron = systemEnv(d, cfg->default_user, 
+					      pw->pw_dir);
+	    verify->userEnviron = userEnv(d, pw->pw_uid == 0,
+					  cfg->default_user,
+					  pw->pw_dir,
+					  pw->pw_shell,
+					  NULL);
+	    verify->uid = pw->pw_uid;
+	    verify->gid = pw->pw_gid;
+
+	    goto done;
+	  }
+	input_buffer_ix[0] = strlen(input_buffer[0]);
+	if (cfg->focus_password)
+	  which_field = 1;
+      }
+
   TextAttrs WelcomeAttrs = {
     cfg->welcome_font, &cfg->welcome_color,
     &cfg->welcome_shadow_color, &cfg->welcome_shadow_offset
@@ -314,15 +471,22 @@ greet_user_rtn GreetUser(
     &cfg->clock_shadow_color, &cfg->clock_shadow_offset
   };
   ClockAttrsPtr = &ClockAttrs;
+  TextAttrs MessageAttrs = {
+    cfg->message_font, &cfg->message_color,
+    &cfg->message_shadow_color, &cfg->message_shadow_offset
+  };
+  MessageAttrsPtr = &MessageAttrs;
 
   SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs, &cfg->welcome_position,
 	       0, cfg->welcome_message);
-  show_input_prompts(cfg, &gfx, 0);
-  show_input_fields(cfg, &gfx, 0);
+  show_input_prompts(cfg, &gfx, which_field);
+  show_input_fields(cfg, &gfx, which_field);
+  int again = 1;
   while (again)
     {
       if (cfg->clock_format)
 	show_clock(cfg, &gfx);
+      show_message(cfg, &gfx, &message);
 
       if (!XPending(dpy))
 	{
@@ -349,7 +513,8 @@ greet_user_rtn GreetUser(
 	    {
 	    case Expose:
 	      show_input_prompts(cfg, &gfx, which_field);
-	      SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs, &cfg->welcome_position,
+	      SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs,
+			   &cfg->welcome_position,
 			   0, cfg->welcome_message);
 	      break;
 	    case KeyPress:
@@ -387,12 +552,17 @@ greet_user_rtn GreetUser(
 		      show_input_prompts(cfg, &gfx, which_field);
 		      break;
 		    }
-		  goto done;
+		  if (!(message = validate(cfg, d, verify)))
+		    goto done;
+		  which_field = 0;
+		  show_input_prompts(cfg, &gfx, which_field);
+		  wipe_field(0);
+		  wipe_field(1);
 		  break;
 		case XK_space:
 		  if (((XKeyEvent *) & event)->state & ControlMask)
 		    {
-		      raise_button_bar();
+		      run_extension(cfg);
 		      break;
 		    }
 		default:
@@ -431,9 +601,21 @@ greet_user_rtn GreetUser(
 
  done:
 
-  dprintf(1, "username is: %s\n", input_buffer[0]);
-  dprintf(1, "password is: %s\n", input_buffer[1]);
-
   CloseGreet(d, &gfx);
-  return Greet_Failure;
+
+  verify->version = 0;
+  char **argv = NULL;
+  if (d->session)
+    argv = parseArgs(argv, d->session);
+  if (greet->string)
+    argv = parseArgs(argv, greet->string);
+  if (!argv)
+    argv = parseArgs(argv, "xsession");
+  verify->argv = argv;
+  greet->name = input_buffer[0];
+  greet->password = input_buffer[1];
+  greet->allow_root_login = cfg->allow_root != 0;
+  greet->allow_null_passwd = cfg->allow_null_pass != 0;
+
+  return Greet_Success;
 }

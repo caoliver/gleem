@@ -443,8 +443,12 @@ int main(int argc, char *argv[])
 
   int result;
 
-  switch (result = GreetUser.function(&display, &dpy,
-				      &verify_info, &greet_info, &dlfuncs))
+  result =
+    GreetUser.function(&display, &dpy, &verify_info, &greet_info, &dlfuncs);
+
+  puts("\n==== Results ====\n");
+
+  switch (result)
     {
     case Greet_Session_Over:
       puts("GreetUser managed its own session.  We're done.");
@@ -456,11 +460,12 @@ int main(int argc, char *argv[])
       puts("GreetUser failed somehow.");
     }
 
-#define SHOW_STR(NAME) printf("\t" #NAME ": %s\n", NAME)
-#define SHOW_NUM(NAME) printf("\t" #NAME ": %d\n", NAME)
+#define SHOW_STR(NAME) printf("" #NAME ": %s\n", NAME)
+#define SHOW_NUM(NAME) printf("" #NAME ": %d\n", NAME)
 
   if (result != Greet_Failure)
     {
+      puts("");
       SHOW_STR(greet_info.name);
       SHOW_STR(greet_info.password);
       SHOW_STR(greet_info.string);
@@ -477,6 +482,7 @@ int main(int argc, char *argv[])
       printenv_internal(verify_info.userEnviron);
       puts("\nverify_info.systemEnviron");
       printenv_internal(verify_info.systemEnviron);
+      puts("");
       SHOW_NUM(verify_info.version);
     }
 
