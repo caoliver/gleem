@@ -199,9 +199,10 @@ __inline__ static void show_clock(Cfg *cfg, Gfx *gfx)
 {
   static char out[256];
   static int needs_erasing;
+  XYPosition old_clock_position;
 
   if (needs_erasing)
-    CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &cfg->clock_position, 0,
+    CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
 		  out);
   needs_erasing = 0;
   time_t t = time(NULL);
@@ -209,7 +210,8 @@ __inline__ static void show_clock(Cfg *cfg, Gfx *gfx)
   if (tm && strftime(out, sizeof(out), cfg->clock_format, tm))
     {
       needs_erasing = 1;
-      SHOW_TEXT_AT(gfx, cfg, ClockAttrsPtr, &cfg->clock_position, 0,
+      old_clock_position = cfg->clock_position;
+      SHOW_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
 		   out);
     }
 }
@@ -280,7 +282,8 @@ static __inline__ char *validate(Cfg *cfg, struct display *d,
     }
 
   memset(input_buffer[1], 0, BUFFER_LEN);
-  sleep(5);
+  if (cfg->bad_pass_delay > 0)
+    sleep(cfg->bad_pass_delay);
   return cfg->msg_bad_pass;
 }
 
@@ -290,16 +293,18 @@ __inline__ static void show_message(Cfg *cfg, Gfx *gfx, char **message)
   static time_t message_expire;
   time_t now = time(NULL);
   static char *old_message;
+  static XYPosition old_message_position;
 
   if (old_message && (*message || now > message_expire))
     {
-      CLEAR_TEXT_AT(gfx, cfg, MessageAttrsPtr, &cfg->message_position, 0,
+      CLEAR_TEXT_AT(gfx, cfg, MessageAttrsPtr, &old_message_position, 0,
 		    old_message);
       old_message = NULL;
     }
   if (*message)
     {
-      SHOW_TEXT_AT(gfx, cfg, MessageAttrsPtr, &cfg->message_position, 0,
+      old_message_position = cfg->message_position;
+      SHOW_TEXT_AT(gfx, cfg, MessageAttrsPtr, &old_message_position, 0,
 		   *message);
       old_message = *message;
       *message = NULL;

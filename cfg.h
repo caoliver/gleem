@@ -7,7 +7,6 @@
 
 #define MAIN_RESOURCE_PREFIX "gleem."
 
-#define RNAME_HIDE_MOUSE hide-mouse
 #define RNAME_AUTO_LOGIN auto-login
 #define RNAME_FOCUS_PASSWORD focus-password
 #define RNAME_DEFAULT_USER default-user
@@ -21,6 +20,7 @@
 #define RNAME_EXTENSION_PROGRAM extension-program
 #define RNAME_ALLOW_ROOT allow-root
 #define RNAME_ALLOW_NULL_PASS allow-null-password
+#define RNAME_BAD_PASS_DELAY bad-password-delay
 
 #define RNAME_MSG_BAD_PASS msg.bad-password
 #define RNAME_MSG_BAD_SHELL msg.bad-shell
@@ -113,10 +113,9 @@
 #define DEFAULT_THEME_SELECTION "default"
 
 #define DEFAULT_MESSAGE_DURATION "3"
+#define DEFAULT_BAD_PASS_DELAY "2"
 #define DEFAULT_XINERAMA_SCREEN "0"
-#define DEFAULT_EXEC_DELAY "0"
 
-#define DEFAULT_HIDE_MOUSE "true"
 #define DEFAULT_AUTO_LOGIN "false"
 #define DEFAULT_FOCUS_PASSWORD "false"
 #define DEFAULT_CURSOR_BLINK "false"
@@ -142,7 +141,7 @@
 #define DEFAULT_BKGND_STYLE "color"
 #define DEFAULT_BKGND_COLOR "black"
 #define DEFAULT_PANEL_COLOR "gray30"
-#define DEFAULT_MESSAGE_COLOR "white"
+#define DEFAULT_MESSAGE_COLOR "red"
 #define DEFAULT_MESSAGE_SHADOW_COLOR "gray"
 #define DEFAULT_WELCOME_COLOR "white"
 #define DEFAULT_WELCOME_SHADOW_COLOR "gray"
@@ -155,8 +154,8 @@
 #define DEFAULT_INPUT_SHADOW_COLOR "black"
 #define DEFAULT_INPUT_HIGHLIGHT_COLOR "gray75"
 
-#define DEFAULT_MESSAGE_FONT "Verdana:size=20:dpi=75"
-#define DEFAULT_WELCOME_FONT "Verdana:size=20:dpi=75"
+#define DEFAULT_MESSAGE_FONT "Verdana:size=28:dpi=75"
+#define DEFAULT_WELCOME_FONT "Verdana:size=36:dpi=75"
 #define DEFAULT_CLOCK_FONT "Verdana:size=20:dpi=75"
 #define DEFAULT_INPUT_FONT "Verdana:size=20:dpi=75"
 #define DEFAULT_PROMPT_FONT "Verdana:size=24:dpi=75"
@@ -164,13 +163,13 @@
 #define DEFAULT_PANEL_POSN "50% 50%"
 #define DEFAULT_PANEL_WIDTH 600
 #define DEFAULT_PANEL_HEIGHT 300
-#define DEFAULT_MESSAGE_POSN "50% 30% center"
-#define DEFAULT_WELCOME_POSN "50% 40% center"
+#define DEFAULT_WELCOME_POSN "300 90 center"
+#define DEFAULT_MESSAGE_POSN "300 140 center"
 #define DEFAULT_CLOCK_POSN "50% 42% center"
-#define DEFAULT_PASS_PROMPT_POSN "160 180 left"
-#define DEFAULT_PASS_INPUT_POSN "180 180 right"
-#define DEFAULT_USER_PROMPT_POSN "160 180 left"
-#define DEFAULT_USER_INPUT_POSN "180 180 right"
+#define DEFAULT_PASS_PROMPT_POSN "180 200 left"
+#define DEFAULT_PASS_INPUT_POSN "200 200 right"
+#define DEFAULT_USER_PROMPT_POSN "180 200 left"
+#define DEFAULT_USER_INPUT_POSN "200 200 right"
 #define DEFAULT_MESSAGE_SHADOW_OFFSET "0 0"
 #define DEFAULT_WELCOME_SHADOW_OFFSET "0 0"
 #define DEFAULT_CLOCK_SHADOW_OFFSET "0 0"
@@ -211,9 +210,9 @@ typedef struct _XYPosition XYPosition;
 
 struct _Cfg {
   struct image background_image, panel_image;
-  int hide_mouse, auto_login, focus_password;
+  int auto_login, focus_password;
   int allow_root, allow_null_pass, cursor_blink, input_highlight;
-  int message_duration;
+  int message_duration, bad_pass_delay;
   ScreenSpecs screen_specs;
   int background_style;
   char password_mask;

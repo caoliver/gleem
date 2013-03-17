@@ -48,6 +48,7 @@
 #define PUT_BELOW 64
 #define HORIZ_MASK (PUT_RIGHT | PUT_LEFT)
 #define VERT_MASK (PUT_ABOVE | PUT_BELOW)
+#define CENTER_MASK (HORIZ_MASK | VERT_MASK)
 
 struct _ResourceSpec {
   char *name;
@@ -347,7 +348,7 @@ get_cfg_position_internal(Display *dpy, void *valptr, char *position_string,
       static int flags_true[] =
 	{ PUT_LEFT, PUT_RIGHT, PUT_ABOVE, PUT_BELOW, PUT_CENTER };
       static int flags_masked[] =
-	{ ~HORIZ_MASK, ~HORIZ_MASK, ~VERT_MASK, ~VERT_MASK, 0 };
+	{ ~HORIZ_MASK, ~HORIZ_MASK, ~VERT_MASK, ~VERT_MASK, ~CENTER_MASK };
       int key_num;
 
       end = (char *)scan_to_space(str);
@@ -464,7 +465,6 @@ static void free_cfg_color(Display *dpy, void *where)
 #define DECL_TYPE Cfg
 
 static ResourceSpec cfg_resources[] = {
-  DECLBOOLEAN(HIDE_MOUSE, HIDE_MOUSE, hide_mouse),
   DECLBOOLEAN(AUTO_LOGIN, AUTO_LOGIN, auto_login),
   DECLBOOLEAN(FOCUS_PASSWORD, FOCUS_PASSWORD, focus_password),
   DECLBOOLEAN(ALLOW_ROOT, ALLOW_ROOT, allow_root),
@@ -472,8 +472,8 @@ static ResourceSpec cfg_resources[] = {
   DECLSTRING(DEFAULT_USER, NULL, default_user),
   DECLDYNAMIC(WELCOME_MESSAGE, get_cfg_welcome,  free_cfg_string,
 	      DEFAULT_WELCOME_MESSAGE, welcome_message),
-  DECLSTATIC(MESSAGE_DURATION, get_cfg_count, DEFAULT_MESSAGE_DURATION,
-	     message_duration),
+  DECLCOUNT(MESSAGE_DURATION, MESSAGE_DURATION, message_duration),
+  DECLCOUNT(BAD_PASS_DELAY, BAD_PASS_DELAY, bad_pass_delay),
   DECLSTATIC(XINERAMA_SCREEN, get_cfg_xinerama,
 	     DEFAULT_XINERAMA_SCREEN, screen_specs),
   DECLSTRING(EXTENSION_PROGRAM, DEFAULT_EXTENSION_PROGRAM, extension_program),

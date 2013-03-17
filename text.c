@@ -5,8 +5,6 @@
 #include "cfg.h"
 #include "gfx.h"
 
-// This never varies, so why pass it?
-
 void text_op_at(int draw_it, Gfx *gfx, Cfg *cfg, TextAttrs *attrs,
 		       XYPosition *position, int input_height, char *str)
 {

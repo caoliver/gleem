@@ -3,7 +3,7 @@ CFLAGS+=-std=c99 ${INCLUDES} -DHAVE_CONFIG_H -DGREET_LIB -fPIC -Wall
 LDFLAGS+=-ljpeg -lpng -lX11 -lXft -lXinerama -ldl
 
 GOBJS=greet.o
-OBJS=image.o numlock.o read.o util.o cfg.o keywords.o text.o
+OBJS=image.o read.o util.o cfg.o keywords.o text.o
 BINS=testgui
 BINS+=testlib libXdmGreet.so
 BINS+=testlib-pam libXdmGreet-pam.so
