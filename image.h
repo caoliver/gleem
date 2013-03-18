@@ -12,7 +12,7 @@ void free_image_buffers(struct image *image);
 Pixmap imageToPixmap(Display *dpy, struct image *image, int scr, Window win);
 void resize_background(struct image *image, const int w, const int h);
 void merge_with_background(struct image *panel, struct image *background,
-			   unsigned int xoffset, unsigned int yoffset);
+			   int xoffset, int yoffset);
 void frame_background(struct image *image,
 		      unsigned int width, unsigned int height,
 		      int xoffset, int yoffset, XftColor *color);

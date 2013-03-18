@@ -254,6 +254,8 @@ struct _Cfg {
   ADD_ALLOC_FLAG(char *, sessions);
   ADD_ALLOC_FLAG(char *, username_prompt);
   ADD_ALLOC_FLAG(char *, password_prompt);
+  ADD_ALLOC_FLAG(char *, theme_username_prompt);
+  ADD_ALLOC_FLAG(char *, theme_password_prompt);
   ADD_ALLOC_FLAG(char *, background_filename);
   ADD_ALLOC_FLAG(char *, panel_filename);
   ADD_ALLOC_FLAG(char *, msg_bad_pass);

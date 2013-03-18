@@ -535,6 +535,8 @@ static ResourceSpec theme_resources[] = {
   DECLFONT(CLOCK_FONT, CLOCK_FONT, clock_font),
   DECLFONT(INPUT_FONT, INPUT_FONT, input_font),
   DECLFONT(PROMPT_FONT, PROMPT_FONT, prompt_font),
+  DECLSTRING(PASS_PROMPT, NULL, theme_password_prompt),
+  DECLSTRING(USER_PROMPT, NULL, theme_username_prompt),
   DECLSTRING(BACKGROUND_FILE, NULL, background_filename),
   DECLSTRING(PANEL_FILE , NULL, panel_filename),
   DECLSTRING(CLOCK_FORMAT , NULL, clock_format),

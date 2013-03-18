@@ -323,7 +323,7 @@ void resize_background(struct image *image, const int w, const int h)
 #define MIN(A,B) (A > B) ? B : A;
 
 void merge_with_background(struct image *panel, struct image *background,
-			   unsigned int xoffset, unsigned int yoffset)
+			   int xoffset, int yoffset)
 {
   if (panel->alpha_data)
     {

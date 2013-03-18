@@ -2,6 +2,7 @@
 #include <X11/Xft/Xft.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <shadow.h>
 
 
@@ -114,12 +115,6 @@ static void CloseGreet(struct display *d, Gfx *gfx)
   XCloseDisplay(dpy);
 }
 
-__inline__ static void run_extension(Cfg *cfg)
-{
-  if (cfg->extension_program)
-    system(cfg->extension_program);
-}
-
 #define BUFFER_LEN 128
 #define USERNAME 0
 #define PASSWORD 1
@@ -142,6 +137,21 @@ __inline__ static void wipe_field(int bufferix)
 int reuse_input_area;
 TextAttrs *PromptAttrsPtr, *ClockAttrsPtr, *MessageAttrsPtr;
 
+
+void hide_cursor(Display *dpy, Window win)
+{
+  static XColor black;
+  Pixmap cursorpixmap;
+  Cursor cursor;
+
+  cursorpixmap = XCreateBitmapFromData(dpy, win, "\0", 1, 1);
+  cursor = XCreatePixmapCursor(dpy, cursorpixmap, cursorpixmap,
+			       &black, &black, 0, 0);
+  XDefineCursor(dpy, win, cursor);
+}
+
+
+
 void show_input_prompts(Cfg *cfg, Gfx *gfx, int active_field)
 {
   static int old_field = -1;
@@ -150,7 +160,8 @@ void show_input_prompts(Cfg *cfg, Gfx *gfx, int active_field)
     {
       SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
 		   &cfg->username_prompt_position,
-		   cfg->input_height, cfg->username_prompt);
+		   cfg->input_height,
+		   cfg->username_prompt);
       SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
 		   &cfg->password_prompt_position,
 		   cfg->input_height, cfg->password_prompt);
@@ -195,24 +206,30 @@ void show_input_fields(Cfg *cfg, Gfx *gfx, int active_field)
   activate_cursor(gfx, cfg, 1);
 }
 
-__inline__ static void show_clock(Cfg *cfg, Gfx *gfx)
+__inline__ static void show_clock(Cfg *cfg, Gfx *gfx, int always_draw)
 {
   static char out[256];
   static int needs_erasing;
   XYPosition old_clock_position;
-
-  if (needs_erasing)
-    CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
-		  out);
-  needs_erasing = 0;
+  static int old_minute = -1;
   time_t t = time(NULL);
   struct tm *tm = localtime(&t);
-  if (tm && strftime(out, sizeof(out), cfg->clock_format, tm))
+
+  if (always_draw || old_minute != tm->tm_min)
     {
-      needs_erasing = 1;
-      old_clock_position = cfg->clock_position;
-      SHOW_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
-		   out);
+      static int x;
+      old_minute = tm->tm_min;
+      if (needs_erasing)
+	CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
+		      out);
+      needs_erasing = 0;
+      if (tm && strftime(out, sizeof(out), cfg->clock_format, tm))
+	{
+	  needs_erasing = 1;
+	  old_clock_position = cfg->clock_position;
+	  SHOW_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
+		       out);
+	}
     }
 }
 
@@ -359,13 +376,22 @@ greet_user_rtn GreetUser(
   __xdm_endpwent = dlfuncs->_endpwent;
   __xdm_crypt = dlfuncs->_crypt;
 
+  LogError("d->authFile is %s\n", d->authFile);
+
   if (!(InitGreet(d, &gfx)))
     {
       LogError ("Cannot reopen display %s for greet window\n", d->name);
       exit (RESERVER_DISPLAY);
     }
+  setenv("DISPLAY", d->name, 1);
+  setenv("XAUTHORITY", d->authFile, 1);
   dpy = gfx.dpy;
   cfg = get_cfg(dpy);
+
+  if (cfg->theme_username_prompt)
+    cfg->username_prompt = cfg->theme_username_prompt;
+  if (cfg->theme_password_prompt)
+    cfg->password_prompt = cfg->theme_password_prompt;
 
   reuse_input_area = 
     (cfg->username_input_position.x == cfg->password_input_position.x &&
@@ -419,6 +445,8 @@ greet_user_rtn GreetUser(
   XFreePixmap(dpy, pixmap);
   XMapWindow(dpy, gfx.background_win);
   XMapWindow(dpy, gfx.panel_win);
+  hide_cursor(dpy, gfx.background_win);
+  hide_cursor(dpy, gfx.panel_win);
 
   set_cursor_dimensions(&gfx, cfg,
                         cfg->cursor_size.x, cfg->cursor_size.y,
@@ -490,7 +518,7 @@ greet_user_rtn GreetUser(
   while (again)
     {
       if (cfg->clock_format)
-	show_clock(cfg, &gfx);
+	show_clock(cfg, &gfx, 0);
       show_message(cfg, &gfx, &message);
 
       if (!XPending(dpy))
@@ -518,6 +546,8 @@ greet_user_rtn GreetUser(
 	    {
 	    case Expose:
 	      show_input_prompts(cfg, &gfx, which_field);
+	      if (cfg->clock_format)
+		show_clock(cfg, &gfx, 1);
 	      SHOW_TEXT_AT(&gfx, cfg, &WelcomeAttrs,
 			   &cfg->welcome_position,
 			   0, cfg->welcome_message);
@@ -548,6 +578,11 @@ greet_user_rtn GreetUser(
 		  wipe_field(1);
 		  show_input_prompts(cfg, &gfx, which_field);
 		  break;
+		case XK_Escape:
+		  which_field = 0;
+		  wipe_field(0);
+		  wipe_field(1);
+		  break;
 		case XK_Return:
 		case XK_KP_Enter:
 		  if (!which_field)
@@ -567,7 +602,8 @@ greet_user_rtn GreetUser(
 		case XK_space:
 		  if (((XKeyEvent *) & event)->state & ControlMask)
 		    {
-		      run_extension(cfg);
+		      if (cfg->extension_program)
+			system(cfg->extension_program);
 		      break;
 		    }
 		default:
@@ -577,11 +613,6 @@ greet_user_rtn GreetUser(
 		    {
 		      switch(keysym)
 			{
-			case XK_c:
-			  which_field = 0;
-			  wipe_field(0);
-			  wipe_field(1);
-			  break;
 			case XK_u:
 			case XK_w:
 			  wipe_field(which_field);
@@ -621,6 +652,8 @@ greet_user_rtn GreetUser(
   greet->password = input_buffer[1];
   greet->allow_root_login = cfg->allow_root != 0;
   greet->allow_null_passwd = cfg->allow_null_pass != 0;
+  unsetenv("XAUTHORITY");
+  unsetenv("DISPLAY");
 
   return Greet_Success;
 }

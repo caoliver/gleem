@@ -1,39 +1,48 @@
 *.shadow.color: #702342
 *.shadow.offset: 1 1
 
-cursor.color: #702342
+cursor.color: #A0E0FF
 cursor.size: 2 22
+!cursor.blink: true
 
-message.position: 50% 40%
-message.color: #FFFFFF
-message.font: Verdana:size=18:bold:dpi=75
+message.position: 240 105 b
+message.color: #FFC8A0
+message.shadow.color: #FFFFFF
+message.font: Verdana:size=25:bold:dpi=75
 
-clock.position: 50% 37%
-clock.color: #FFFFFF
+clock.position: 240 80 b
+clock.color: #d0d0d0
+clock.shadow.color: #ffffff
+clock.shadow.offset: 1 1
 clock.font: Verdana:size=20:bold:dpi=75
 clock.format: %a %F %k:%M
 
-!welcome.font: Verdana:size=18:bold:dpi=75
-welcome.font: Verdana:size=36:bold:dpi=75
-welcome.position: 50% 30%
-welcome.color: #FFFFFF
+welcome.font: Verdana:size=30:bold:dpi=75
+welcome.position: 240 30 b
+welcome.color: #d0d0d0
+welcome.shadow.color: #ffffff
+welcome.shadow.offset: 1 1
 
 background.file: background.jpg
-background.style: stretch
+background.style: center
 background.color: #EEDDDD
 
 panel.file: panel.png
-panel.position: 25% 65%
+panel.position: 7% 8% r b
 
-input.font: Verdana:size=16:bold:dpi=75
+input.font: Verdana:size=18:dpi=75
 input.height: 24
-input.color: #702342
-input.alternate.color: #904362
-input.shadow.color: #000000
+input.color: #b0b0b0
+input.alternate.color: #c8c8c8
+input.shadow.color: #ffffff
 input.shadow.offset: 0 0
 
-prompt.color: #f9f9f9
-prompt.font: Verdana:size=16:bold:dpi=75
-*.prompt.position: 375 188 left above
-*.input.width: 193
-*.input.position: 389 188 right above
+prompt.color: #d0d0d0
+prompt.shadow.color: #ffffff
+prompt.shadow.offset: 1 1
+prompt.font: Verdana:bold:size=18:dpi=75
+*.prompt.position: 240 140 b
+*.input.width: 275
+*.input.position: 100 212 right above
+username.prompt.string: Please enter your username
+password.prompt.string: Please enter your password
