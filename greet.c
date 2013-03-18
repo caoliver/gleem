@@ -578,6 +578,7 @@ greet_user_rtn GreetUser(
 		  break;
 		case XK_Escape:
 		  which_field = 0;
+		  show_input_prompts(cfg, &gfx, which_field);
 		  wipe_field(0);
 		  wipe_field(1);
 		  break;
@@ -600,8 +601,28 @@ greet_user_rtn GreetUser(
 		case XK_space:
 		  if (((XKeyEvent *) & event)->state & ControlMask)
 		    {
+		      XWarpPointer(gfx.dpy, None,
+				   gfx.background_win,
+				   0, 0, 0, 0, 20, 10);
+		      XSync(gfx.dpy, False);
+
+		      int flag, root_x, root_y, win_x, win_y, mask_return;
+		      Window root_return, child_return;
+		      flag = XQueryPointer(gfx.dpy, gfx.root_win,
+					   &root_return, &child_return,
+					   &root_x, &root_y,
+					   &win_x, &win_y, &mask_return);
+		      dprintf(1, "Flag: %d   root: (%d,%d)   win: (%d,%d)\n",
+			      flag, root_x, root_y, win_x, win_y);
+
 		      if (cfg->extension_program)
-			system(cfg->extension_program);
+			{
+			  system(cfg->extension_program);
+			  // Toss any pending keystrokes that may have
+			  // piled up while our app ran with our keyboard
+			  // grab still in effect.
+			  XSync(gfx.dpy, True);
+			}
 		      break;
 		    }
 		default:
