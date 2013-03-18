@@ -376,8 +376,6 @@ greet_user_rtn GreetUser(
   __xdm_endpwent = dlfuncs->_endpwent;
   __xdm_crypt = dlfuncs->_crypt;
 
-  LogError("d->authFile is %s\n", d->authFile);
-
   if (!(InitGreet(d, &gfx)))
     {
       LogError ("Cannot reopen display %s for greet window\n", d->name);
