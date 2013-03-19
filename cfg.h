@@ -15,6 +15,7 @@
 #define RNAME_XINERAMA_SCREEN xinerama-screen
 #define RNAME_THEME_DIRECTORY theme.directory
 #define RNAME_THEME_SELECTION theme.selection
+#define RNAME_PASS_DISPLAY password.input-display
 #define RNAME_PASS_PROMPT password.prompt.string
 #define RNAME_USER_PROMPT username.prompt.string
 #define RNAME_EXTENSION_PROGRAM extension-program
@@ -96,7 +97,6 @@
 // -- Miscelaneous
 
 #define RNAME_BACKGROUND_STYLE background-style
-#define RNAME_PASS_DISPLAY password.input-display
 #define RNAME_CURSOR_SIZE cursor.size
 #define RNAME_CURSOR_OFFSET cursor.offset
 #define RNAME_CLOCK_FORMAT clock.format

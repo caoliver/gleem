@@ -157,7 +157,7 @@ void show_input_at(Gfx *gfx, Cfg *cfg, char *str, XYPosition *position,
       if (secret_mask < 33)
 	{
 	  extents.width = 0;
-	  star_width = secret_mask;
+	  star_width = secret_mask == 32 ? 1 : secret_mask;
 	}
       else if (star_width < 8)
 	star_width += 2;
