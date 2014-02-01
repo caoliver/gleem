@@ -194,8 +194,8 @@ static int get_cfg_welcome(Display *dpy, void *valptr, char *src_string)
 		    exit(UNMANAGE_DISPLAY);
 		  }
 		host_len = strlen(host);
-		result_len += host_len;
 	      }
+	    result_len += host_len;
 	    break;
 	  case 'd':
 	    if (!domain)
@@ -212,8 +212,8 @@ static int get_cfg_welcome(Display *dpy, void *valptr, char *src_string)
 		  domain[1] && strcmp(&domain[1], "(none)")
 		  ? strlen(domain)
 		  : 0;
-		result_len += domain_len;
 	      }
+	    result_len += domain_len;
 	    break;
 	  case '~':
 	    result_len++;
