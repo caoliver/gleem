@@ -174,7 +174,7 @@ static int get_cfg_welcome(Display *dpy, void *valptr, char *src_string)
 {
   int result_len = 1;
   char *host = NULL, *domain = NULL;
-  int host_len, domain_len;
+  int host_len = 0, domain_len = 0;
 
   char *ptr = src_string;
 

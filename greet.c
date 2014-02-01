@@ -1,5 +1,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
+#include <X11/cursorfont.h>
+
 #include <time.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -19,6 +21,7 @@
 #include "image.h"
 #include "cfg.h"
 #include "gfx.h"
+#include "text.h"
 
 
 #define USER_PARAM_NAME "GLEEM_USER_PARAM"
@@ -148,14 +151,22 @@ void hide_cursor(Display *dpy, Window win)
   cursor = XCreatePixmapCursor(dpy, cursorpixmap, cursorpixmap,
 			       &black, &black, 0, 0);
   XDefineCursor(dpy, win, cursor);
+  XFreeCursor(dpy, cursor);
+  XFreePixmap(dpy, cursorpixmap);
 }
 
+
+void show_cursor(Display *dpy, Window win)
+{
+  Cursor cursor;
+  cursor = XCreateFontCursor(dpy, XC_top_left_arrow);
+  XDefineCursor(dpy, win, cursor);
+  XFreeCursor(dpy, cursor);
+}
 
 
 void show_input_prompts(Cfg *cfg, Gfx *gfx, int active_field)
 {
-  static int old_field = -1;
-
   if (!reuse_input_area)
     {
       SHOW_TEXT_AT(gfx, cfg, PromptAttrsPtr,
@@ -217,7 +228,6 @@ __inline__ static void show_clock(Cfg *cfg, Gfx *gfx, int always_draw)
 
   if (always_draw || old_minute != tm->tm_min)
     {
-      static int x;
       old_minute = tm->tm_min;
       if (needs_erasing)
 	CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
@@ -443,6 +453,7 @@ greet_user_rtn GreetUser(
   XFreePixmap(dpy, pixmap);
   XMapWindow(dpy, gfx.background_win);
   XMapWindow(dpy, gfx.panel_win);
+
   hide_cursor(dpy, gfx.background_win);
   hide_cursor(dpy, gfx.panel_win);
 
@@ -603,10 +614,15 @@ greet_user_rtn GreetUser(
 		    {
 		      if (cfg->extension_program)
 			{
+			  show_cursor(dpy, gfx.background_win);
+			  show_cursor(dpy, gfx.panel_win);
+			  XFlush(dpy);
 			  system(cfg->extension_program);
 			  // Toss any pending keystrokes that may
 			  // have piled up since keyboard grab is
 			  // still in effect.
+			  hide_cursor(dpy, gfx.background_win);
+			  hide_cursor(dpy, gfx.panel_win);
 			  XSync(gfx.dpy, True);
 			}
 		      break;
