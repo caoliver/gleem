@@ -393,6 +393,8 @@ greet_user_rtn GreetUser(
     }
   setenv("DISPLAY", d->name, 1);
   setenv("XAUTHORITY", d->authFile, 1);
+  if (!d->grabServer)
+    __xdm_SetupDisplay(d);
   dpy = gfx.dpy;
   cfg = get_cfg(dpy);
 
@@ -659,6 +661,10 @@ greet_user_rtn GreetUser(
  done:
 
   CloseGreet(d, &gfx);
+  if (__xdm_source(verify->systemEnviron, d->startup) != 0) {
+    LogError("Startup script failed.\n");
+    return Greet_Failure;
+  }
 
   verify->version = 0;
   char **argv = NULL;
