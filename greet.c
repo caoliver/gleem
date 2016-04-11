@@ -288,7 +288,11 @@ static __inline__ char *validate(Cfg *cfg, struct display *d,
 	if (sp = getspnam(input_buffer[0]))
 	  password = sp->sp_pwdp;
 
-      fuzzed_pw = crypt(input_buffer[1], password);
+      if (password[0])
+	fuzzed_pw = crypt(input_buffer[1], password);
+      else
+	// In case password is blank, then expect a blank input
+	fuzzed_pw = input_buffer[1];
       if (!strcmp(password, fuzzed_pw))
 	{
 	  memset(input_buffer[1], 0, BUFFER_LEN);
