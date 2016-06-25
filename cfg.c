@@ -469,6 +469,8 @@ static ResourceSpec cfg_resources[] = {
   DECLBOOLEAN(FOCUS_PASSWORD, FOCUS_PASSWORD, focus_password),
   DECLBOOLEAN(ALLOW_ROOT, ALLOW_ROOT, allow_root),
   DECLBOOLEAN(ALLOW_NULL_PASS, ALLOW_NULL_PASS, allow_null_pass),
+  DECLBOOLEAN(ALLOW_KBD_SLEEP, ALLOW_KBD_SLEEP, allow_kbd_sleep),
+  DECLBOOLEAN(ALLOW_KBD_HALT, ALLOW_KBD_HALT, allow_kbd_halt),
   DECLSTRING(DEFAULT_USER, NULL, default_user),
   DECLDYNAMIC(WELCOME_MESSAGE, get_cfg_welcome,  free_cfg_string,
 	      DEFAULT_WELCOME_MESSAGE, welcome_message),

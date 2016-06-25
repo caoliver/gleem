@@ -21,6 +21,8 @@
 #define RNAME_EXTENSION_PROGRAM extension-program
 #define RNAME_ALLOW_ROOT allow-root
 #define RNAME_ALLOW_NULL_PASS allow-null-password
+#define RNAME_ALLOW_KBD_SLEEP allow-keyboard-sleep
+#define RNAME_ALLOW_KBD_HALT allow-keyboard-halt
 #define RNAME_BAD_PASS_DELAY bad-password-delay
 
 #define RNAME_MSG_BAD_PASS msg.bad-password
@@ -122,6 +124,8 @@
 #define DEFAULT_INPUT_HIGHLIGHT "false"
 #define DEFAULT_ALLOW_ROOT "true"
 #define DEFAULT_ALLOW_NULL_PASS "true"
+#define DEFAULT_ALLOW_KBD_SLEEP "false"
+#define DEFAULT_ALLOW_KBD_HALT "false"
 #define DEFAULT_EXTENSION_PROGRAM NULL
 
 #define DEFAULT_MSG_BAD_PASS "Invalid user or password"
@@ -211,7 +215,8 @@ typedef struct _XYPosition XYPosition;
 struct _Cfg {
   struct image background_image, panel_image;
   int auto_login, focus_password;
-  int allow_root, allow_null_pass, cursor_blink, input_highlight;
+  int allow_root, allow_null_pass, allow_kbd_sleep, allow_kbd_halt;
+  int cursor_blink, input_highlight;
   int message_duration, bad_pass_delay;
   ScreenSpecs screen_specs;
   int background_style;

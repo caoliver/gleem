@@ -1,4 +1,5 @@
 #include <X11/Xlib.h>
+#include <X11/XF86keysym.h>
 #include <X11/Xft/Xft.h>
 #include <X11/cursorfont.h>
 
@@ -343,6 +344,11 @@ __inline__ static void show_message(Cfg *cfg, Gfx *gfx, char **message)
     }
 }
 
+#define ALL_MODS (ControlMask | ShiftMask | LockMask | ControlMask |\
+		  Mod1Mask | Mod2Mask| Mod3Mask | Mod4Mask | Mod5Mask)
+#define SLEEP_MODS Mod4Mask
+#define HALT_MODS (Mod4Mask | Mod1Mask | ControlMask)
+#define REBOOT_MODS (Mod4Mask | ShiftMask | ControlMask)
 
 _X_EXPORT
 greet_user_rtn GreetUser(
@@ -614,6 +620,18 @@ greet_user_rtn GreetUser(
 		  show_input_prompts(cfg, &gfx, which_field);
 		  wipe_field(0);
 		  wipe_field(1);
+		  break;
+		case XF86XK_PowerOff: {
+		  int PowerMods = ((XKeyEvent *) & event)->state & ALL_MODS;
+		  if (cfg->allow_kbd_sleep && PowerMods == SLEEP_MODS)
+		    system("/usr/sbin/pm-suspend");
+		  if (cfg->allow_kbd_halt) {
+		    if (PowerMods == HALT_MODS)
+		      system("/sbin/shutdown -h now");
+		    if (PowerMods == REBOOT_MODS)
+		      system("/sbin/shutdown -r now");
+		  }
+		}
 		  break;
 		case XK_space:
 		  if (((XKeyEvent *) & event)->state & ControlMask)
