@@ -536,6 +536,8 @@ greet_user_rtn GreetUser(
   show_input_prompts(cfg, &gfx, which_field);
   show_input_fields(cfg, &gfx, which_field);
   int again = 1;
+  int keycount = 0;
+  int sleep_pending = 0, halt_pending = 0, reboot_pending = 0;
   while (again)
     {
       if (cfg->clock_format)
@@ -573,7 +575,22 @@ greet_user_rtn GreetUser(
 			   &cfg->welcome_position,
 			   0, cfg->welcome_message);
 	      break;
+	    case KeyRelease:
+	      if (keycount-- < 0)
+		keycount = 0;
+	      if (!keycount) {
+		if (sleep_pending) {
+		  sleep_pending = 0;
+		  system("/usr/sbin/pm-suspend");
+		}
+		if (reboot_pending)
+		  system("/sbin/shutdown -r now");
+		if (halt_pending)
+		  system("/sbin/shutdown -h now");
+	      }
+	      break;
 	    case KeyPress:
+	      keycount++;
 	      XLookupString(&event.xkey, &ascii, 1, &keysym, &compstatus);
 	      switch (keysym)
 		{
@@ -624,12 +641,12 @@ greet_user_rtn GreetUser(
 		case XF86XK_PowerOff: {
 		  int PowerMods = ((XKeyEvent *) & event)->state & ALL_MODS;
 		  if (cfg->allow_kbd_sleep && PowerMods == SLEEP_MODS)
-		    system("/usr/sbin/pm-suspend");
+		    sleep_pending = 1;
 		  if (cfg->allow_kbd_halt) {
 		    if (PowerMods == HALT_MODS)
-		      system("/sbin/shutdown -h now");
+		      halt_pending = 1;
 		    if (PowerMods == REBOOT_MODS)
-		      system("/sbin/shutdown -r now");
+		      reboot_pending = 1;
 		  }
 		}
 		  break;
