@@ -648,6 +648,9 @@ greet_user_rtn GreetUser(
 		    if (PowerMods == REBOOT_MODS)
 		      reboot_pending = 1;
 		  }
+		  // In case keycount got hosed
+		  if (PowerMods == 0)
+		    keycount = 1;
 		}
 		  break;
 		case XK_space:
