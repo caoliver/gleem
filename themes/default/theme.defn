@@ -15,7 +15,7 @@ clock.color: #d0d0d0
 clock.shadow.color: #ffffff
 clock.shadow.offset: 1 1
 clock.font: Verdana:size=20:bold:dpi=75
-clock.format: %a %F %k:%M
+clock.format: %a %F %H:%M
 
 welcome.font: Verdana:size=30:bold:dpi=75
 welcome.position: 240 30 b
