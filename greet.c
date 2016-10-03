@@ -231,8 +231,15 @@ __inline__ static void show_clock(Cfg *cfg, Gfx *gfx, int always_draw)
     {
       old_minute = tm->tm_min;
       if (needs_erasing)
-	CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
-		      out);
+        {
+	  /* Kluge to fix shrinking clock on wake from suspend.
+	   * Assumes M is fat and string length variation is small.
+	   * The lower case letters are to clean up descenders.
+	   */
+	  strncat(out, "MMMMMMMMjgpq", sizeof(out) - strlen(out) - 1);
+	  CLEAR_TEXT_AT(gfx, cfg, ClockAttrsPtr, &old_clock_position, 0,
+			out);
+	}
       needs_erasing = 0;
       if (tm && strftime(out, sizeof(out), cfg->clock_format, tm))
 	{

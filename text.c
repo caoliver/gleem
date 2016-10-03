@@ -35,7 +35,7 @@ void text_op_at(int draw_it, Gfx *gfx, Cfg *cfg, TextAttrs *attrs,
     (shadow_offs->x < 0
      ? -shadow_offs->x
      : shadow_offs->x),
-    eraseh = extents.height +
+    eraseh = extents.height + 1 +
     (shadow_offs->y < 0
      ? -shadow_offs->y
      : shadow_offs->y);
